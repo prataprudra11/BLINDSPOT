@@ -1,0 +1,14 @@
+{
+  "name": "extension-backend-server",
+  "version": "1.0.0",
+  "description": "Minimal Node.js + Express backend server for AI Agent Chrome Extension",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsdom": "^30.0.1"
+  }
+}
