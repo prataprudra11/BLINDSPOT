@@ -1,5 +1,5 @@
 // server/verify_e2e_payload.js
-// Simulates end-to-end Perception + Redaction pipeline against the active Express server
+// Simulates end-to-end Perception + Anonymous Element Mapper + Privacy Firewall pipeline
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
@@ -8,16 +8,21 @@ const http = require('http');
 const SERVER_URL = 'http://localhost:3000/agent/act';
 const ROOT_DIR = path.resolve(__dirname, '..');
 const PII_FORM_HTML = path.join(ROOT_DIR, 'pii_form.html');
+const ELEMENT_MAPPER_JS = path.join(ROOT_DIR, 'element-mapper.js');
 const REDACTION_JS = path.join(ROOT_DIR, 'redaction.js');
 const CONTENT_SCRIPT_JS = path.join(ROOT_DIR, 'content_script.js');
+const PRIVACY_FIREWALL_JS = path.join(ROOT_DIR, 'privacy-firewall.js');
 const OUTPUT_FILE = path.join(ROOT_DIR, 'verification_payload_example.json');
+
+const { runFinalPrivacyScan } = require(PRIVACY_FIREWALL_JS);
 
 async function runVerification() {
   console.log('================================================================================');
-  console.log('🧪 RUNNING END-TO-END PIPELINE VERIFICATION TEST');
+  console.log('🧪 RUNNING END-TO-END PIPELINE VERIFICATION TEST (WITH ANONYMOUS IDs & FIREWALL)');
   console.log('================================================================================');
 
   const htmlContent = fs.readFileSync(PII_FORM_HTML, 'utf8');
+  const mapperCode = fs.readFileSync(ELEMENT_MAPPER_JS, 'utf8');
   const redactionCode = fs.readFileSync(REDACTION_JS, 'utf8');
   const contentScriptCode = fs.readFileSync(CONTENT_SCRIPT_JS, 'utf8');
 
@@ -49,11 +54,12 @@ async function runVerification() {
     }
   };
 
-  // Execute redaction.js then content_script.js in DOM context
+  // Execute element-mapper.js, redaction.js, then content_script.js in exact manifest order
+  window.eval(mapperCode);
   window.eval(redactionCode);
   window.eval(contentScriptCode);
 
-  console.log('✅ Injected redaction.js and content_script.js into JSDOM environment.');
+  console.log('✅ Injected element-mapper.js, redaction.js, and content_script.js into JSDOM.');
 
   // Trigger TASK_ANNOUNCEMENT message to content script
   console.log('🚀 Simulating TASK_ANNOUNCEMENT dispatched from background worker...');
@@ -77,6 +83,32 @@ async function runVerification() {
 
   const sanitizedContext = contentScriptResponse.sanitizedContext;
 
+  // VERIFY ANONYMOUS IDs: Ensure elements use anonymous IDs (el_001, ...) and NO CSS selectors
+  console.log('\n--------------------------------------------------------------------------------');
+  console.log('🔍 VERIFYING ANONYMOUS ELEMENT MAPPING:');
+  console.log('--------------------------------------------------------------------------------');
+  const elements = sanitizedContext.elements || [];
+  let anonymousIdPassed = true;
+  let noSelectorPassed = true;
+
+  for (const el of elements) {
+    if (!el.id || !/^el_\d{3}$/.test(el.id)) {
+      console.error(`  ❌ Element missing valid anonymous id:`, el);
+      anonymousIdPassed = false;
+    }
+    if ('selector' in el) {
+      console.error(`  ❌ Element leaked real CSS selector over the wire:`, el.selector);
+      noSelectorPassed = false;
+    }
+  }
+
+  if (anonymousIdPassed) {
+    console.log(`  ✅ [PASS] All ${elements.length} elements use sequential anonymous IDs (el_001..el_${String(elements.length).padStart(3, '0')}).`);
+  }
+  if (noSelectorPassed) {
+    console.log(`  ✅ [PASS] Real CSS selectors completely absent from outgoing elements array (held locally only).`);
+  }
+
   // Assemble serverPayload as background.js does
   const serverPayload = {
     action: 'INITIATE_TASK',
@@ -95,6 +127,18 @@ async function runVerification() {
     },
     timestamp: new Date().toISOString()
   };
+
+  // EXECUTE PRIVACY FIREWALL: Verify final gate check
+  console.log('\n--------------------------------------------------------------------------------');
+  console.log('🛡️ RUNNING FAIL-CLOSED PRIVACY FIREWALL ON SERVER PAYLOAD:');
+  console.log('--------------------------------------------------------------------------------');
+  const firewallResult = runFinalPrivacyScan(serverPayload);
+  if (firewallResult.blocked) {
+    console.error('  ❌ [FAIL] Privacy Firewall BLOCKED the payload! Violations:', firewallResult.violations);
+    process.exit(1);
+  } else {
+    console.log('  ✅ [PASS] Privacy Firewall scan PASSED (zero PII violations detected).');
+  }
 
   console.log('\n--------------------------------------------------------------------------------');
   console.log('📤 Dispatching POST /agent/act to live Express server at http://localhost:3000...');
@@ -187,10 +231,10 @@ async function runVerification() {
   }
 
   console.log('================================================================================');
-  if (leaks === 0) {
-    console.log('🎉 ZERO-LEAKAGE VERIFIED: End-to-end pipeline is mathematically airtight!');
+  if (leaks === 0 && anonymousIdPassed && noSelectorPassed) {
+    console.log('🎉 ZERO-LEAKAGE & ANONYMOUS MAPPING VERIFIED: Pipeline is mathematically airtight!');
   } else {
-    console.error(`💥 AUDIT FAILED: ${leaks} secret(s) leaked to server payload.`);
+    console.error(`💥 AUDIT FAILED.`);
     process.exit(1);
   }
   console.log('================================================================================');

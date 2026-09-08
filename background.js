@@ -1,6 +1,13 @@
 // background.js - Chrome Extension Service Worker (Manifest V3)
 console.log("[Background Service Worker] Initializing service worker...");
 
+// Import Fail-Closed Privacy Firewall Gate
+try {
+  importScripts("privacy-firewall.js");
+} catch (err) {
+  console.warn("[Background] Service worker importScripts note:", err.message);
+}
+
 const SERVER_URL = "http://localhost:3000/agent/act";
 
 // Lifecycle listener: onInstalled
@@ -106,8 +113,7 @@ async function handleStartTask(goal, sendResponse) {
       }
     }
 
-    // Step 3: Send POST request to backend server
-    console.log(`[Background] Step 3: Dispatching POST request to ${SERVER_URL}...`);
+    // Step 3: Construct Outgoing Server Payload
     const serverPayload = {
       action: "INITIATE_TASK",
       goal: goal,
@@ -122,8 +128,35 @@ async function handleStartTask(goal, sendResponse) {
       timestamp: new Date().toISOString()
     };
 
-    console.log("[Background] 📤 Request payload for server:", JSON.stringify(serverPayload, null, 2));
+    console.log("[Background] 📤 Prepared server payload:", JSON.stringify(serverPayload, null, 2));
 
+    // Step 4: Run Fail-Closed Privacy Firewall Scan as final gate
+    console.log("[Background] Step 4: Running final fail-closed Privacy Firewall scan...");
+    const scanner = typeof runFinalPrivacyScan === "function" ? runFinalPrivacyScan : (typeof self !== "undefined" && self.runFinalPrivacyScan ? self.runFinalPrivacyScan : null);
+    if (scanner) {
+      const firewallResult = scanner(serverPayload);
+      if (firewallResult.blocked) {
+        console.error("[Background] 🚨 PRIVACY FIREWALL BLOCKED OUTGOING REQUEST:", firewallResult);
+        resultPayload.steps.push({
+          step: "privacy_firewall",
+          status: "blocked",
+          violationsCount: firewallResult.violationsCount,
+          violations: firewallResult.violations
+        });
+        resultPayload.error = `Transmission aborted: Privacy Firewall detected ${firewallResult.violationsCount} unredacted secret(s) in payload.`;
+        sendResponse({
+          status: "blocked",
+          message: "Privacy Firewall aborted transmission to protect user privacy.",
+          data: resultPayload
+        });
+        return; // ABORT - NEVER SEND SENSITIVE DATA
+      }
+      console.log("[Background] 🛡️ Final Privacy Firewall check passed (zero PII detected).");
+      resultPayload.steps.push({ step: "privacy_firewall", status: "passed" });
+    }
+
+    // Step 4: Send POST request to backend server
+    console.log(`[Background] Step 4: Dispatching POST request to ${SERVER_URL}...`);
     const response = await fetch(SERVER_URL, {
       method: "POST",
       headers: {

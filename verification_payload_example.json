@@ -12,141 +12,149 @@
     "totalElements": 19,
     "elements": [
       {
-        "selector": "#full-name",
+        "id": "el_001",
         "tag": "input",
         "type": "text",
         "text": "Full Name",
         "sensitive": false,
+        "name": "name",
         "value": "[REDACTED:name]"
       },
       {
-        "selector": "#email-addr",
+        "id": "el_002",
         "tag": "input",
         "type": "email",
-        "text": "Email Address",
+        "text": "[REDACTED:address]",
         "sensitive": false,
+        "name": "email",
         "value": "[REDACTED:email]"
       },
       {
-        "selector": "#phone-num",
+        "id": "el_003",
         "tag": "input",
         "type": "tel",
         "text": "Phone Number",
         "sensitive": false,
+        "name": "phone",
         "value": "+91 [REDACTED:phone]"
       },
       {
-        "selector": "#pass-field",
+        "id": "el_004",
         "tag": "input",
         "type": "password",
         "text": "[REDACTED:sensitive]",
         "sensitive": true,
+        "name": "password",
         "category": "password"
       },
       {
-        "selector": "#res-address",
+        "id": "el_005",
         "tag": "textarea",
         "type": "textarea",
         "text": "[REDACTED:address]",
         "sensitive": false,
+        "name": "address",
         "value": "[REDACTED:address]"
       },
       {
-        "selector": "#pan-card",
+        "id": "el_006",
         "tag": "input",
         "type": "text",
         "text": "Synthetic PAN Card Number",
         "sensitive": false,
+        "name": "pan",
         "value": "[REDACTED:pan]"
       },
       {
-        "selector": "#aadhaar-card",
+        "id": "el_007",
         "tag": "input",
         "type": "text",
         "text": "Synthetic Aadhaar Number",
         "sensitive": false,
+        "name": "aadhaar",
         "value": "[REDACTED:aadhaar]"
       },
       {
-        "selector": "#credit-card",
+        "id": "el_008",
         "tag": "input",
         "type": "text",
         "text": "[REDACTED:sensitive]",
         "sensitive": true,
+        "name": "card",
         "category": "payment"
       },
       {
-        "selector": "#btn-submit-pii",
+        "id": "el_009",
         "tag": "button",
         "type": "button",
         "text": "Submit Verified Profile",
         "sensitive": false
       },
       {
-        "selector": "body > div > div:nth-of-type(2) > div > h3",
+        "id": "el_010",
         "tag": "h3",
         "type": "heading",
         "text": "Synthetic User Identity",
         "sensitive": false
       },
       {
-        "selector": "body > div > div:nth-of-type(2) > div > p",
+        "id": "el_011",
         "tag": "p",
         "type": "text block",
         "text": "Profile ID: SYN-883921",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div > div > label",
+        "id": "el_012",
         "tag": "label",
         "type": "label",
         "text": "Full Name",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div > div:nth-of-type(2) > label",
+        "id": "el_013",
         "tag": "label",
         "type": "label",
-        "text": "Email Address",
+        "text": "[REDACTED:address]",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div:nth-of-type(2) > div > label",
+        "id": "el_014",
         "tag": "label",
         "type": "label",
         "text": "Phone Number",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div:nth-of-type(2) > div:nth-of-type(2) > label",
+        "id": "el_015",
         "tag": "label",
         "type": "label",
         "text": "Account Password",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div:nth-of-type(3) > label",
+        "id": "el_016",
         "tag": "label",
         "type": "label",
-        "text": "Residential Address",
+        "text": "[REDACTED:address]",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div:nth-of-type(4) > div > label",
+        "id": "el_017",
         "tag": "label",
         "type": "label",
         "text": "Synthetic PAN Card Number",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div:nth-of-type(4) > div:nth-of-type(2) > label",
+        "id": "el_018",
         "tag": "label",
         "type": "label",
         "text": "Synthetic Aadhaar Number",
         "sensitive": false
       },
       {
-        "selector": "body > div > form > div:nth-of-type(5) > label",
+        "id": "el_019",
         "tag": "label",
         "type": "label",
         "text": "Synthetic Credit Card",
@@ -155,51 +163,66 @@
     ],
     "redactions": [
       {
-        "selector": "#full-name",
+        "id": "el_001",
         "category": "name",
         "confidence": 0.7
       },
       {
-        "selector": "#email-addr",
+        "id": "el_002",
         "category": "email",
         "confidence": 1
       },
       {
-        "selector": "#phone-num",
+        "id": "el_002",
+        "category": "address",
+        "confidence": 0.7
+      },
+      {
+        "id": "el_003",
         "category": "phone",
         "confidence": 1
       },
       {
-        "selector": "#pass-field",
+        "id": "el_004",
         "category": "password",
         "confidence": 1
       },
       {
-        "selector": "#res-address",
+        "id": "el_005",
         "category": "address",
         "confidence": 0.7
       },
       {
-        "selector": "#res-address",
+        "id": "el_005",
         "category": "address",
         "confidence": 0.7
       },
       {
-        "selector": "#pan-card",
+        "id": "el_006",
         "category": "pan",
         "confidence": 1
       },
       {
-        "selector": "#aadhaar-card",
+        "id": "el_007",
         "category": "aadhaar",
         "confidence": 1
       },
       {
-        "selector": "#credit-card",
+        "id": "el_008",
         "category": "payment",
         "confidence": 1
+      },
+      {
+        "id": "el_013",
+        "category": "address",
+        "confidence": 0.7
+      },
+      {
+        "id": "el_016",
+        "category": "address",
+        "confidence": 0.7
       }
     ]
   },
-  "timestamp": "2026-09-08T16:41:35.067Z"
+  "timestamp": "2026-09-08T19:39:21.683Z"
 }
