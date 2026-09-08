@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent Assistant</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="extension-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-orb"></div>
+        <div>
+          <h1 class="title">Agent Control</h1>
+          <p class="subtitle">Manifest V3 Skeleton</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="status-badge status-idle">
+        <span class="status-dot"></span>
+        <span id="statusText">Idle</span>
+      </div>
+    </header>
+
+    <!-- Goal Form -->
+    <main class="main-content">
+      <div class="input-group">
+        <label for="taskGoal" class="label">Task Goal</label>
+        <textarea
+          id="taskGoal"
+          class="goal-input"
+          rows="3"
+          placeholder="e.g. Find pricing plans on this page..."
+        >Verify message passing to server and content script</textarea>
+      </div>
+
+      <div class="button-row">
+        <button id="startBtn" class="btn btn-primary">
+          <span class="btn-text">Start Agent</span>
+          <span class="btn-loader hidden" id="btnSpinner"></span>
+        </button>
+        <button id="pingServerBtn" class="btn btn-secondary" title="Test server connection">
+          Ping Server
+        </button>
+      </div>
+
+      <!-- Logs / Status Area -->
+      <section class="logs-section">
+        <div class="logs-header">
+          <span class="logs-title">System & Event Logs</span>
+          <button id="clearLogsBtn" class="btn-text-link">Clear</button>
+        </div>
+        <div id="logsConsole" class="logs-console" role="log" aria-live="polite">
+          <div class="log-entry log-system">
+            <span class="log-time">[Init]</span>
+            <span class="log-msg">Popup UI loaded. Ready to dispatch messages.</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="endpoint-indicator">Server: <code>http://localhost:3000</code></span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
