@@ -266,6 +266,12 @@ function resolveElementType(el) {
 function extractDOM() {
   console.log("[Content Script] 🔄 Starting DOM extraction scan on:", window.location.href);
 
+  // RESET ELEMENT MAPPER on each perception cycle to eliminate stale DOM references
+  const mapper = typeof ElementMapper !== "undefined" ? ElementMapper : (typeof window !== "undefined" ? window.ElementMapper : null);
+  if (mapper && typeof mapper.resetMap === "function") {
+    mapper.resetMap();
+  }
+
   const seenElements = new Set();
   const extractedList = [];
   const MAX_ELEMENTS = 200;
@@ -320,13 +326,24 @@ function extractDOM() {
     const elementType = resolveElementType(el);
     const selector = getStableSelector(el);
 
+    // Register with ElementMapper: assigns anonymous ID (el_001, ...) and stores DOM node locally
+    const anonymousId = (mapper && typeof mapper.registerElement === "function")
+      ? mapper.registerElement(el, selector)
+      : `el_${String(extractedList.length + 1).padStart(3, "0")}`;
+
+    // Outgoing payload contains ONLY the anonymous id. Real selector is kept strictly in local memory.
     const item = {
-      selector: selector,
+      id: anonymousId,
       tag: tagName,
       type: elementType,
       text: text,
       sensitive: sensitivity.sensitive
     };
+
+    const nameAttr = el.getAttribute("name");
+    if (nameAttr) {
+      item.name = nameAttr;
+    }
 
     if (sensitivity.sensitive) {
       item.category = sensitivity.category;

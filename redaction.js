@@ -187,6 +187,8 @@ function sanitizeContext(extractedJSON) {
     // Clone element to prevent mutating the original input object
     const el = { ...originalEl };
 
+    const targetRef = el.id || el.selector || "unknown";
+
     // Absolute priority rule: Any element flagged sensitive: true must NEVER leak value or raw text
     if (el.sensitive === true) {
       // Ensure any value property is completely removed
@@ -197,11 +199,13 @@ function sanitizeContext(extractedJSON) {
       // Sanitize text if present to prevent any credential/secret hints
       el.text = "[REDACTED:sensitive]";
 
-      redactions.push({
-        selector: el.selector || "unknown",
+      const redEntry = {
+        id: targetRef,
         category: el.category || "sensitive",
         confidence: 1.0
-      });
+      };
+      if (el.selector) redEntry.selector = el.selector;
+      redactions.push(redEntry);
 
       sanitizedElements.push(el);
       continue;
@@ -209,55 +213,69 @@ function sanitizeContext(extractedJSON) {
 
     // Standard elements: check visible text / label / placeholder
     if (typeof el.text === "string" && el.text.length > 0) {
-      const { sanitizedText, redactionEvents } = redactText(el.text, el.selector);
+      const { sanitizedText, redactionEvents } = redactText(el.text, targetRef);
       el.text = sanitizedText;
       if (redactionEvents.length > 0) {
-        redactions.push(...redactionEvents);
+        redactions.push(...redactionEvents.map(evt => {
+          const entry = { id: targetRef, category: evt.category, confidence: evt.confidence };
+          if (el.selector) entry.selector = el.selector;
+          return entry;
+        }));
       }
     }
 
     // Double-check if any unintended "value" key sneaked into an input
     if ("value" in el) {
       if (typeof el.value === "string" && el.value.length > 0) {
-        const { sanitizedText, redactionEvents } = redactText(el.value, el.selector);
+        const { sanitizedText, redactionEvents } = redactText(el.value, targetRef);
         el.value = sanitizedText;
         if (redactionEvents.length > 0) {
-          redactions.push(...redactionEvents);
+          redactions.push(...redactionEvents.map(evt => {
+            const entry = { id: targetRef, category: evt.category, confidence: evt.confidence };
+            if (el.selector) entry.selector = el.selector;
+            return entry;
+          }));
         }
       }
     }
 
     // Contextual form field heuristics for Name and Address (Option B stopgap)
-    const isNameField = /full[-_]?name|name/i.test(el.selector || "") || /^(full[-_]?name|name)$/i.test(el.name || "");
-    const isAddressField = /address|residence/i.test(el.selector || "") || /address/i.test(el.name || "");
+    const isNameField = /full[-_]?name|name/i.test(el.selector || "") || /^(full[-_]?name|name)$/i.test(el.name || "") || /full[-_]?name|name/i.test(el.text || "");
+    const isAddressField = /address|residence/i.test(el.selector || "") || /address/i.test(el.name || "") || /address|residence/i.test(el.text || "");
 
     if (isNameField && typeof el.value === "string" && el.value.trim() && !el.value.includes("[REDACTED:")) {
       if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(el.value.trim())) {
         el.value = "[REDACTED:name]";
-        redactions.push({
-          selector: el.selector || "unknown",
+        const entry = {
+          id: targetRef,
           category: "name",
           confidence: 0.7
-        });
+        };
+        if (el.selector) entry.selector = el.selector;
+        redactions.push(entry);
       }
     }
 
     if (isAddressField) {
       if (typeof el.value === "string" && el.value.trim() && !el.value.includes("[REDACTED:")) {
         el.value = "[REDACTED:address]";
-        redactions.push({
-          selector: el.selector || "unknown",
+        const entry = {
+          id: targetRef,
           category: "address",
           confidence: 0.7
-        });
+        };
+        if (el.selector) entry.selector = el.selector;
+        redactions.push(entry);
       }
       if (typeof el.text === "string" && el.text.trim() && !el.text.includes("[REDACTED:")) {
         el.text = "[REDACTED:address]";
-        redactions.push({
-          selector: el.selector || "unknown",
+        const entry = {
+          id: targetRef,
           category: "address",
           confidence: 0.7
-        });
+        };
+        if (el.selector) entry.selector = el.selector;
+        redactions.push(entry);
       }
     }
 
