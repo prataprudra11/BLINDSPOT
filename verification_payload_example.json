@@ -1,0 +1,205 @@
+{
+  "action": "INITIATE_TASK",
+  "goal": "Verify KYC Profile details and submit verified form.",
+  "activeTab": {
+    "id": 101,
+    "url": "file:///c:/Users/RUDRA/OneDrive/Desktop/FOLDERS/coding/SIH%202026/pii_form.html",
+    "title": "Demo Portal — PII Verification Form"
+  },
+  "context": {
+    "url": "file:///c:/Users/RUDRA/OneDrive/Desktop/FOLDERS/coding/SIH%202026/pii_form.html",
+    "title": "Demo Portal — PII Verification Form",
+    "totalElements": 19,
+    "elements": [
+      {
+        "selector": "#full-name",
+        "tag": "input",
+        "type": "text",
+        "text": "Full Name",
+        "sensitive": false,
+        "value": "[REDACTED:name]"
+      },
+      {
+        "selector": "#email-addr",
+        "tag": "input",
+        "type": "email",
+        "text": "Email Address",
+        "sensitive": false,
+        "value": "[REDACTED:email]"
+      },
+      {
+        "selector": "#phone-num",
+        "tag": "input",
+        "type": "tel",
+        "text": "Phone Number",
+        "sensitive": false,
+        "value": "+91 [REDACTED:phone]"
+      },
+      {
+        "selector": "#pass-field",
+        "tag": "input",
+        "type": "password",
+        "text": "[REDACTED:sensitive]",
+        "sensitive": true,
+        "category": "password"
+      },
+      {
+        "selector": "#res-address",
+        "tag": "textarea",
+        "type": "textarea",
+        "text": "[REDACTED:address]",
+        "sensitive": false,
+        "value": "[REDACTED:address]"
+      },
+      {
+        "selector": "#pan-card",
+        "tag": "input",
+        "type": "text",
+        "text": "Synthetic PAN Card Number",
+        "sensitive": false,
+        "value": "[REDACTED:pan]"
+      },
+      {
+        "selector": "#aadhaar-card",
+        "tag": "input",
+        "type": "text",
+        "text": "Synthetic Aadhaar Number",
+        "sensitive": false,
+        "value": "[REDACTED:aadhaar]"
+      },
+      {
+        "selector": "#credit-card",
+        "tag": "input",
+        "type": "text",
+        "text": "[REDACTED:sensitive]",
+        "sensitive": true,
+        "category": "payment"
+      },
+      {
+        "selector": "#btn-submit-pii",
+        "tag": "button",
+        "type": "button",
+        "text": "Submit Verified Profile",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > div:nth-of-type(2) > div > h3",
+        "tag": "h3",
+        "type": "heading",
+        "text": "Synthetic User Identity",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > div:nth-of-type(2) > div > p",
+        "tag": "p",
+        "type": "text block",
+        "text": "Profile ID: SYN-883921",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div > div > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Full Name",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div > div:nth-of-type(2) > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Email Address",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div:nth-of-type(2) > div > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Phone Number",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div:nth-of-type(2) > div:nth-of-type(2) > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Account Password",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div:nth-of-type(3) > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Residential Address",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div:nth-of-type(4) > div > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Synthetic PAN Card Number",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div:nth-of-type(4) > div:nth-of-type(2) > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Synthetic Aadhaar Number",
+        "sensitive": false
+      },
+      {
+        "selector": "body > div > form > div:nth-of-type(5) > label",
+        "tag": "label",
+        "type": "label",
+        "text": "Synthetic Credit Card",
+        "sensitive": false
+      }
+    ],
+    "redactions": [
+      {
+        "selector": "#full-name",
+        "category": "name",
+        "confidence": 0.7
+      },
+      {
+        "selector": "#email-addr",
+        "category": "email",
+        "confidence": 1
+      },
+      {
+        "selector": "#phone-num",
+        "category": "phone",
+        "confidence": 1
+      },
+      {
+        "selector": "#pass-field",
+        "category": "password",
+        "confidence": 1
+      },
+      {
+        "selector": "#res-address",
+        "category": "address",
+        "confidence": 0.7
+      },
+      {
+        "selector": "#res-address",
+        "category": "address",
+        "confidence": 0.7
+      },
+      {
+        "selector": "#pan-card",
+        "category": "pan",
+        "confidence": 1
+      },
+      {
+        "selector": "#aadhaar-card",
+        "category": "aadhaar",
+        "confidence": 1
+      },
+      {
+        "selector": "#credit-card",
+        "category": "payment",
+        "confidence": 1
+      }
+    ]
+  },
+  "timestamp": "2026-09-08T16:41:35.067Z"
+}
