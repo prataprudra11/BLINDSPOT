@@ -45,6 +45,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
+ * Contacts content script on a tab to extract and sanitize DOM.
+ * If the content script is not yet injected or disconnected (e.g. extension was reloaded),
+ * automatically injects the content scripts via chrome.scripting.executeScript and retries.
+ */
+async function requestSanitizedDOMFromTab(tabId, goal) {
+  const trySendMessage = () =>
+    new Promise((resolve) => {
+      chrome.tabs.sendMessage(
+        tabId,
+        { type: "TASK_ANNOUNCEMENT", goal: goal },
+        (res) => {
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+          } else {
+            resolve(res);
+          }
+        }
+      );
+    });
+
+  let response = await trySendMessage();
+
+  // If connection failed (e.g. "Receiving end does not exist" after extension reload), auto-inject!
+  if (response?.error) {
+    console.log(`[Background] 🔄 Content script unreachable on Tab ${tabId} (${response.error}). Auto-injecting scripts...`);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ["element-mapper.js", "redaction.js", "content_script.js"]
+      });
+      // Short delay for scripts to initialize and register listeners
+      await new Promise((r) => setTimeout(r, 200));
+      response = await trySendMessage();
+      console.log("[Background] 📥 Response after auto-injection:", response?.status);
+    } catch (injectErr) {
+      console.warn(`[Background] Auto-injection failed on Tab ${tabId}:`, injectErr.message);
+    }
+  }
+
+  return response;
+}
+
+/**
  * Orchestrates task initiation:
  * 1. Queries the active tab
  * 2. Contacts content script in active tab
@@ -79,37 +122,38 @@ async function handleStartTask(goal, sendResponse) {
         title: activeTab.title 
       });
 
-      // Step 2: Ping / message content script in the active tab
-      console.log("[Background] Step 2: Sending TASK_ANNOUNCEMENT to content script on tab", activeTab.id);
+      // Step 2: Ping / message content script in the active tab with auto-injection fallback
+      console.log("[Background] Step 2: Requesting sanitized DOM from tab", activeTab.id);
       try {
-        const contentScriptResponse = await new Promise((resolve) => {
-          chrome.tabs.sendMessage(
-            activeTab.id, 
-            { type: "TASK_ANNOUNCEMENT", goal: goal }, 
-            (res) => {
-              if (chrome.runtime.lastError) {
-                console.warn("[Background] ⚠️ Content script communication note:", chrome.runtime.lastError.message);
-                resolve({ error: chrome.runtime.lastError.message });
-              } else {
-                resolve(res);
-              }
-            }
-          );
-        });
+        const contentScriptResponse = await requestSanitizedDOMFromTab(activeTab.id, goal);
 
-        console.log("[Background] 📥 Response from content script:", contentScriptResponse?.status);
         if (contentScriptResponse?.sanitizedContext) {
           sanitizedContext = contentScriptResponse.sanitizedContext;
+          console.log(`[Background] 📥 Received sanitized context: ${sanitizedContext.totalElements} elements, ${sanitizedContext.redactions?.length || 0} redactions.`);
+          resultPayload.steps.push({ 
+            step: "content_script_message", 
+            status: contentScriptResponse.status || "acknowledged",
+            totalElements: sanitizedContext.totalElements,
+            redactionsCount: sanitizedContext.redactions?.length || 0
+          });
+        } else {
+          const reason = contentScriptResponse?.error || "Content script was not reachable";
+          console.warn("[Background] ⚠️ Could not get sanitized context from tab:", reason);
+          resultPayload.steps.push({ step: "content_script_message", status: "failed", error: reason });
+          resultPayload.error = "Could not extract DOM from page. Please refresh the page tab (F5 / Ctrl+R) and click 'Start Agent' again.";
+          sendResponse({
+            status: "error",
+            message: resultPayload.error,
+            data: resultPayload
+          });
+          return; // Abort - never send empty context: null
         }
-        resultPayload.steps.push({ 
-          step: "content_script_message", 
-          status: contentScriptResponse?.status || "no_status",
-          totalElements: sanitizedContext?.totalElements || 0,
-          redactionsCount: sanitizedContext?.redactions?.length || 0
-        });
       } catch (contentErr) {
         console.warn("[Background] Error communicating with content script:", contentErr.message);
         resultPayload.steps.push({ step: "content_script_message", error: contentErr.message });
+        resultPayload.error = `Content script error: ${contentErr.message}. Please refresh the page tab.`;
+        sendResponse({ status: "error", message: resultPayload.error, data: resultPayload });
+        return;
       }
     }
 
