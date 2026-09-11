@@ -82,11 +82,21 @@
       const elements = parsed?.context?.elements || parsed?.elements || [];
       if (Array.isArray(elements)) {
         for (const el of elements) {
-          if (el && el.sensitive === true && "value" in el) {
+          if (!el) continue;
+          const isCredential = el.type === "password" || el.category === "password" || el.category === "payment";
+          const isPlaceholder = typeof el.value === "string" && (
+            /^(EMAIL|PHONE|PERSON|CARD|ADDRESS|PASSWORD|PAN|AADHAAR)_\d+$/i.test(el.value) ||
+            /\b(EMAIL|PHONE|PERSON|CARD|ADDRESS|PASSWORD|PAN|AADHAAR)_\d+\b/.test(el.value) ||
+            el.value.includes("[REDACTED:")
+          );
+          const hasUnredactedValue = typeof el.value === "string" && !isPlaceholder;
+          if ((isCredential && "value" in el) || (el.sensitive === true && hasUnredactedValue)) {
             violations.push({
-              category: "password",
+              category: el.category || (isCredential ? "password" : "sensitive"),
               elementId: el.id || el.selector || "unknown",
-              detail: "Element flagged sensitive:true retained a forbidden 'value' property."
+              detail: isCredential 
+                ? "Credential element retained a forbidden 'value' property." 
+                : "Element flagged sensitive:true retained an unredacted 'value' property."
             });
           }
         }
