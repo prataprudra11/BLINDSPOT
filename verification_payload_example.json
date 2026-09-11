@@ -4,225 +4,220 @@
   "activeTab": {
     "id": 101,
     "url": "file:///c:/Users/RUDRA/OneDrive/Desktop/FOLDERS/coding/SIH%202026/pii_form.html",
-    "title": "Demo Portal — PII Verification Form"
+    "title": "Demo Portal — Multi-Step PII Verification Form"
   },
   "context": {
     "url": "file:///c:/Users/RUDRA/OneDrive/Desktop/FOLDERS/coding/SIH%202026/pii_form.html",
-    "title": "Demo Portal — PII Verification Form",
-    "totalElements": 19,
+    "title": "Demo Portal — Multi-Step PII Verification Form",
+    "totalElements": 20,
     "elements": [
       {
         "id": "el_001",
         "tag": "input",
         "type": "text",
-        "text": "Full Name",
-        "sensitive": false,
+        "sensitive": true,
+        "label": "Full Name",
         "name": "name",
-        "value": "[REDACTED:name]"
+        "value": "PERSON_1"
       },
       {
         "id": "el_002",
         "tag": "input",
         "type": "email",
-        "text": "[REDACTED:address]",
-        "sensitive": false,
+        "sensitive": true,
+        "label": "Email Address",
         "name": "email",
-        "value": "[REDACTED:email]"
+        "value": "EMAIL_1"
       },
       {
         "id": "el_003",
         "tag": "input",
         "type": "tel",
-        "text": "Phone Number",
-        "sensitive": false,
+        "sensitive": true,
+        "label": "Phone Number",
         "name": "phone",
-        "value": "+91 [REDACTED:phone]"
+        "value": "+91 PHONE_1"
       },
       {
         "id": "el_004",
         "tag": "input",
         "type": "password",
-        "text": "[REDACTED:sensitive]",
         "sensitive": true,
+        "label": "Account Password",
         "name": "password",
         "category": "password"
       },
       {
         "id": "el_005",
-        "tag": "textarea",
-        "type": "textarea",
-        "text": "[REDACTED:address]",
+        "tag": "button",
+        "type": "button",
         "sensitive": false,
-        "name": "address",
-        "value": "[REDACTED:address]"
+        "text": "Continue to Step 2: KYC Details →"
       },
       {
         "id": "el_006",
-        "tag": "input",
-        "type": "text",
-        "text": "Synthetic PAN Card Number",
-        "sensitive": false,
-        "name": "pan",
-        "value": "[REDACTED:pan]"
+        "tag": "textarea",
+        "type": "textarea",
+        "sensitive": true,
+        "label": "Residential Address",
+        "name": "address",
+        "value": "ADDRESS_1"
       },
       {
         "id": "el_007",
         "tag": "input",
         "type": "text",
-        "text": "Synthetic Aadhaar Number",
-        "sensitive": false,
-        "name": "aadhaar",
-        "value": "[REDACTED:aadhaar]"
+        "sensitive": true,
+        "label": "Synthetic PAN Card Number",
+        "name": "pan",
+        "value": "PAN_1"
       },
       {
         "id": "el_008",
         "tag": "input",
         "type": "text",
-        "text": "[REDACTED:sensitive]",
         "sensitive": true,
-        "name": "card",
-        "category": "payment"
+        "label": "Synthetic Aadhaar Number",
+        "name": "aadhaar",
+        "value": "AADHAAR_1"
       },
       {
         "id": "el_009",
         "tag": "button",
         "type": "button",
-        "text": "Submit Verified Profile",
-        "sensitive": false
+        "sensitive": false,
+        "text": "← Back"
       },
       {
         "id": "el_010",
-        "tag": "h3",
-        "type": "heading",
-        "text": "Synthetic User Identity",
-        "sensitive": false
+        "tag": "button",
+        "type": "button",
+        "sensitive": false,
+        "text": "Continue to Step 3: Payment →"
       },
       {
         "id": "el_011",
-        "tag": "p",
-        "type": "text block",
-        "text": "Profile ID: SYN-883921",
-        "sensitive": false
+        "tag": "input",
+        "type": "text",
+        "sensitive": true,
+        "label": "Synthetic Credit Card",
+        "name": "card",
+        "category": "payment"
       },
       {
         "id": "el_012",
-        "tag": "label",
-        "type": "label",
-        "text": "Full Name",
-        "sensitive": false
+        "tag": "button",
+        "type": "button",
+        "sensitive": false,
+        "text": "← Back"
       },
       {
         "id": "el_013",
-        "tag": "label",
-        "type": "label",
-        "text": "[REDACTED:address]",
-        "sensitive": false
+        "tag": "button",
+        "type": "button",
+        "sensitive": false,
+        "text": "Submit Verified Profile"
       },
       {
         "id": "el_014",
-        "tag": "label",
-        "type": "label",
-        "text": "Phone Number",
-        "sensitive": false
+        "tag": "h3",
+        "type": "heading",
+        "sensitive": false,
+        "text": "Synthetic User Identity"
       },
       {
         "id": "el_015",
-        "tag": "label",
-        "type": "label",
-        "text": "Account Password",
-        "sensitive": false
+        "tag": "h4",
+        "type": "heading",
+        "sensitive": false,
+        "text": "Step 1: Personal & Contact Details"
       },
       {
         "id": "el_016",
-        "tag": "label",
-        "type": "label",
-        "text": "[REDACTED:address]",
-        "sensitive": false
+        "tag": "h4",
+        "type": "heading",
+        "sensitive": false,
+        "text": "Step 2: Address & Government KYC"
       },
       {
         "id": "el_017",
-        "tag": "label",
-        "type": "label",
-        "text": "Synthetic PAN Card Number",
-        "sensitive": false
+        "tag": "h4",
+        "type": "heading",
+        "sensitive": false,
+        "text": "Step 3: Payment Verification & Final Submit"
       },
       {
         "id": "el_018",
-        "tag": "label",
-        "type": "label",
-        "text": "Synthetic Aadhaar Number",
-        "sensitive": false
+        "tag": "h3",
+        "type": "heading",
+        "sensitive": false,
+        "text": "Verification Complete!"
       },
       {
         "id": "el_019",
-        "tag": "label",
-        "type": "label",
-        "text": "Synthetic Credit Card",
-        "sensitive": false
+        "tag": "p",
+        "type": "text block",
+        "sensitive": false,
+        "text": "Profile ID: SYN-883921"
+      },
+      {
+        "id": "el_020",
+        "tag": "p",
+        "type": "text block",
+        "sensitive": false,
+        "text": "All 3 steps completed. Synthetic Profile Successfully Submitted."
       }
     ],
     "redactions": [
       {
         "id": "el_001",
         "category": "name",
-        "confidence": 0.7
+        "confidence": 0.7,
+        "placeholder": "PERSON_1"
       },
       {
         "id": "el_002",
         "category": "email",
-        "confidence": 1
-      },
-      {
-        "id": "el_002",
-        "category": "address",
-        "confidence": 0.7
+        "confidence": 1,
+        "placeholder": "EMAIL_1"
       },
       {
         "id": "el_003",
         "category": "phone",
-        "confidence": 1
+        "confidence": 1,
+        "placeholder": "PHONE_1"
       },
       {
         "id": "el_004",
         "category": "password",
-        "confidence": 1
-      },
-      {
-        "id": "el_005",
-        "category": "address",
-        "confidence": 0.7
-      },
-      {
-        "id": "el_005",
-        "category": "address",
-        "confidence": 0.7
+        "confidence": 1,
+        "placeholder": "PASSWORD_1"
       },
       {
         "id": "el_006",
-        "category": "pan",
-        "confidence": 1
+        "category": "address",
+        "confidence": 0.7,
+        "placeholder": "ADDRESS_1"
       },
       {
         "id": "el_007",
-        "category": "aadhaar",
-        "confidence": 1
+        "category": "pan",
+        "confidence": 1,
+        "placeholder": "PAN_1"
       },
       {
         "id": "el_008",
+        "category": "aadhaar",
+        "confidence": 1,
+        "placeholder": "AADHAAR_1"
+      },
+      {
+        "id": "el_011",
         "category": "payment",
-        "confidence": 1
-      },
-      {
-        "id": "el_013",
-        "category": "address",
-        "confidence": 0.7
-      },
-      {
-        "id": "el_016",
-        "category": "address",
-        "confidence": 0.7
+        "confidence": 1,
+        "placeholder": "CARD_1"
       }
     ]
   },
-  "timestamp": "2026-09-08T19:39:21.683Z"
+  "timestamp": "2026-09-11T10:12:11.324Z"
 }
