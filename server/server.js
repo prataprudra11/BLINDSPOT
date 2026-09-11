@@ -15,6 +15,8 @@ app.use(express.json());
 // Serve demo portal files (pii_form.html, dashboard.html) directly
 app.use(express.static(path.join(__dirname, "..")));
 
+const { planNextAction } = require("./planner");
+
 // Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
@@ -32,18 +34,49 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Primary POST /agent/act endpoint - Echoes back the request body as JSON
+// Primary POST /agent/act endpoint - Returns structured next action
 app.post("/agent/act", (req, res) => {
-  const incomingData = req.body;
+  const incomingData = req.body || {};
   const timestamp = new Date().toISOString();
 
   console.log("--------------------------------------------------");
   console.log(`[Server] 🎯 Received /agent/act request at ${timestamp}`);
-  console.log("[Server] Payload received from Chrome Extension:");
-  console.log(JSON.stringify(incomingData, null, 2));
+  console.log("[Server] Incoming Goal:", incomingData.goal || "(none)");
+  console.log(`[Server] Elements received: ${incomingData.context?.elements?.length || 0}`);
   console.log("--------------------------------------------------");
 
-  // Echo response
+  // Handle direct PING tests from popup
+  if (incomingData.action === "PING_TEST") {
+    return res.status(200).json({
+      status: "success",
+      message: "Server acknowledged ping test.",
+      receivedAt: timestamp,
+      echo: incomingData
+    });
+  }
+
+  // Plan next action if context and goal are provided
+  if (incomingData.context || incomingData.goal) {
+    const plannedAction = planNextAction(
+      incomingData.context,
+      incomingData.goal,
+      incomingData.history || []
+    );
+
+    console.log("[Server] 💡 Planned Next Action:", JSON.stringify(plannedAction, null, 2));
+
+    const responsePayload = {
+      status: "success",
+      message: "Server planned next action.",
+      receivedAt: timestamp,
+      action: plannedAction,
+      ...plannedAction
+    };
+
+    return res.status(200).json(responsePayload);
+  }
+
+  // Fallback echo response
   const responsePayload = {
     status: "success",
     message: "Server acknowledged and echoed agent action request.",
@@ -51,7 +84,6 @@ app.post("/agent/act", (req, res) => {
     echo: incomingData
   };
 
-  console.log("[Server] 📤 Dispatching echo response back to extension...");
   return res.status(200).json(responsePayload);
 });
 
