@@ -266,10 +266,17 @@ function resolveElementType(el) {
 function extractDOM() {
   console.log("[Content Script] 🔄 Starting DOM extraction scan on:", window.location.href);
 
-  // RESET ELEMENT MAPPER on each perception cycle to eliminate stale DOM references
+  // RESET ELEMENT MAPPER & PLACEHOLDER REGISTRY on each perception cycle
   const mapper = typeof ElementMapper !== "undefined" ? ElementMapper : (typeof window !== "undefined" ? window.ElementMapper : null);
   if (mapper && typeof mapper.resetMap === "function") {
     mapper.resetMap();
+  }
+
+  const resetRegistry = typeof resetPlaceholderRegistry === "function"
+    ? resetPlaceholderRegistry
+    : (typeof window !== "undefined" ? window.resetPlaceholderRegistry : null);
+  if (resetRegistry) {
+    resetRegistry();
   }
 
   const seenElements = new Set();
@@ -296,8 +303,8 @@ function extractDOM() {
   const headingSelectors = ["h1", "h2", "h3", "h4", "h5", "h6", '[role="heading"]'];
   const headingElements = Array.from(document.querySelectorAll(headingSelectors.join(",")));
 
-  // Priority 3: Informative text blocks
-  const textSelectors = ["p", "label", "li", "dt", "dd"];
+  // Priority 3: Informative text blocks (labels are resolved onto inputs, not emitted standalone)
+  const textSelectors = ["p", "li", "dt", "dd"];
   const textElements = Array.from(document.querySelectorAll(textSelectors.join(",")));
 
   // Process items in order of priority
@@ -331,14 +338,23 @@ function extractDOM() {
       ? mapper.registerElement(el, selector)
       : `el_${String(extractedList.length + 1).padStart(3, "0")}`;
 
+    const inputType = (el.getAttribute("type") || "").toLowerCase();
+    const isButtonInput = tagName === "input" && ["submit", "button", "reset", "image"].includes(inputType);
+    const isFormControl = (tagName === "input" && !isButtonInput) || tagName === "textarea" || tagName === "select";
+
     // Outgoing payload contains ONLY the anonymous id. Real selector is kept strictly in local memory.
     const item = {
       id: anonymousId,
       tag: tagName,
       type: elementType,
-      text: text,
       sensitive: sensitivity.sensitive
     };
+
+    if (isFormControl) {
+      item.label = text;
+    } else {
+      item.text = text;
+    }
 
     const nameAttr = el.getAttribute("name");
     if (nameAttr) {
@@ -348,7 +364,7 @@ function extractDOM() {
     if (sensitivity.sensitive) {
       item.category = sensitivity.category;
       // CRITICAL: Value is NEVER included or inspected for sensitive items.
-    } else if (["input", "textarea", "select"].includes(tagName) && typeof el.value === "string" && el.value.length > 0) {
+    } else if (isFormControl && typeof el.value === "string" && el.value.length > 0) {
       // For non-sensitive form controls, record current value so local perception can sanitize it
       item.value = el.value;
     }
@@ -430,6 +446,76 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         data: sanitizedDOM
       });
       break;
+    }
+
+    case "EXECUTE_ACTION": {
+      console.log("[Content Script] ⚡ Received EXECUTE_ACTION:", message.action);
+      const validator = typeof ActionValidator !== "undefined" ? ActionValidator : (typeof window !== "undefined" ? window.ActionValidator : null);
+      const executor = typeof ActionExecutor !== "undefined" ? ActionExecutor : (typeof window !== "undefined" ? window.ActionExecutor : null);
+
+      if (!validator || !executor) {
+        console.error("[Content Script] ❌ ActionValidator or ActionExecutor not found.");
+        sendResponse({
+          success: false,
+          valid: false,
+          reason: "ActionValidator or ActionExecutor module not initialized in content script."
+        });
+        return false;
+      }
+
+      // Step 1: Validate action against live page DOM
+      const validation = validator.validateAction(message.action);
+      if (!validation.valid) {
+        console.warn("[Content Script] ❌ Action rejected by ActionValidator:", validation.reason);
+        sendResponse({
+          success: false,
+          valid: false,
+          reason: validation.reason,
+          action: message.action
+        });
+        return false;
+      }
+
+      // Step 2: Execute asynchronously
+      (async () => {
+        try {
+          const execResult = await executor.executeAction(message.action);
+          if (!execResult.success) {
+            sendResponse({
+              success: false,
+              valid: true,
+              executionError: execResult.error,
+              action: message.action
+            });
+            return;
+          }
+
+          // Step 3: Wait briefly for DOM to settle
+          const settleMs = typeof message.settleMs === "number" ? message.settleMs : 300;
+          await new Promise((resolve) => setTimeout(resolve, settleMs));
+
+          // Step 4: Re-observe DOM (extractDOM resets mapper and placeholder registry)
+          const rawDOM = extractDOM();
+          const sanitizer = typeof sanitizeContext === "function" ? sanitizeContext : window.sanitizeContext;
+          const reObservedContext = sanitizer ? sanitizer(rawDOM) : rawDOM;
+
+          sendResponse({
+            success: true,
+            valid: true,
+            executionResult: execResult,
+            sanitizedContext: reObservedContext
+          });
+        } catch (err) {
+          sendResponse({
+            success: false,
+            valid: true,
+            executionError: err.message,
+            action: message.action
+          });
+        }
+      })();
+
+      return true; // Keep channel open for async response
     }
 
     default:

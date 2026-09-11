@@ -1,14 +1,15 @@
 // background.js - Chrome Extension Service Worker (Manifest V3)
 console.log("[Background Service Worker] Initializing service worker...");
 
-// Import Fail-Closed Privacy Firewall Gate
+// Import Modules for Service Worker context
 try {
-  importScripts("privacy-firewall.js");
+  importScripts("action-schema.js", "privacy-firewall.js");
 } catch (err) {
   console.warn("[Background] Service worker importScripts note:", err.message);
 }
 
 const SERVER_URL = "http://localhost:3000/agent/act";
+const MAX_LOOP_STEPS = 10;
 
 // Lifecycle listener: onInstalled
 chrome.runtime.onInstalled.addListener((details) => {
@@ -27,13 +28,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message: "Background received content script registration.",
       workerTime: new Date().toISOString()
     });
-    return false; // synchronous response
+    return false;
   }
 
-  // 2. Start Task requested from Popup
+  // 2. Start Task requested from Popup (Observe-Redact-Reason-Act Loop)
   if (message.type === "START_TASK") {
     console.log("[Background] 🚀 START_TASK received with goal:", message.goal);
-
     handleStartTask(message.goal, sendResponse);
     return true; // Keep message channel open for async response
   }
@@ -45,9 +45,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
+ * Sends telemetry updates to Popup UI if currently open.
+ */
+function notifyPopupProgress(update) {
+  try {
+    chrome.runtime.sendMessage({
+      type: "LOOP_STEP_UPDATE",
+      ...update,
+      timestamp: new Date().toISOString()
+    }, () => {
+      if (chrome.runtime.lastError) {
+        // Popup may be closed, ignore
+      }
+    });
+  } catch (_) {}
+}
+
+/**
  * Contacts content script on a tab to extract and sanitize DOM.
- * If the content script is not yet injected or disconnected (e.g. extension was reloaded),
- * automatically injects the content scripts via chrome.scripting.executeScript and retries.
+ * If disconnected or not yet injected, auto-injects all required scripts.
  */
 async function requestSanitizedDOMFromTab(tabId, goal) {
   const trySendMessage = () =>
@@ -67,16 +83,22 @@ async function requestSanitizedDOMFromTab(tabId, goal) {
 
   let response = await trySendMessage();
 
-  // If connection failed (e.g. "Receiving end does not exist" after extension reload), auto-inject!
+  // If connection failed, auto-inject complete pipeline in dependency order
   if (response?.error) {
     console.log(`[Background] 🔄 Content script unreachable on Tab ${tabId} (${response.error}). Auto-injecting scripts...`);
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
-        files: ["element-mapper.js", "redaction.js", "content_script.js"]
+        files: [
+          "element-mapper.js",
+          "action-schema.js",
+          "action-validator.js",
+          "action-executor.js",
+          "redaction.js",
+          "content_script.js"
+        ]
       });
-      // Short delay for scripts to initialize and register listeners
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 250));
       response = await trySendMessage();
       console.log("[Background] 📥 Response after auto-injection:", response?.status);
     } catch (injectErr) {
@@ -88,146 +110,340 @@ async function requestSanitizedDOMFromTab(tabId, goal) {
 }
 
 /**
- * Orchestrates task initiation:
- * 1. Queries the active tab
- * 2. Contacts content script in active tab
- * 3. Sends POST request to the local Node.js /agent/act server
- * 4. Relays aggregated status back to the popup UI
+ * Dispatches an action execution request to the active tab's content script.
+ */
+async function executeActionInTab(tabId, action, settleMs = 300) {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "EXECUTE_ACTION", action: action, settleMs: settleMs },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          resolve(response);
+        }
+      }
+    );
+  });
+}
+
+/**
+ * Orchestrates the complete Phase 3 closed loop:
+ * observe -> redact -> reason -> act -> re-observe
  */
 async function handleStartTask(goal, sendResponse) {
   const resultPayload = {
     goal: goal,
     steps: [],
-    serverData: null,
+    history: [],
+    stepCount: 0,
+    maxSteps: MAX_LOOP_STEPS,
+    status: "running",
+    stopReason: "",
     error: null
   };
 
   let sanitizedContext = null;
+  let activeTab = null;
 
   try {
     // Step 1: Query current active tab
-    console.log("[Background] Step 1: Querying active tab...");
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
+    console.log("[Background] Step 1: Locating active tab...");
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    activeTab = tabs && tabs.length > 0 ? tabs[0] : null;
+
     if (!activeTab) {
-      console.warn("[Background] ⚠️ No active tab found.");
-      resultPayload.steps.push({ step: "tab_query", status: "failed", message: "No active tab found" });
-    } else {
-      console.log(`[Background] ✅ Active tab located: ID=${activeTab.id}, URL=${activeTab.url}`);
-      resultPayload.steps.push({ 
-        step: "tab_query", 
-        status: "success", 
-        tabId: activeTab.id, 
-        url: activeTab.url,
-        title: activeTab.title 
-      });
-
-      // Step 2: Ping / message content script in the active tab with auto-injection fallback
-      console.log("[Background] Step 2: Requesting sanitized DOM from tab", activeTab.id);
-      try {
-        const contentScriptResponse = await requestSanitizedDOMFromTab(activeTab.id, goal);
-
-        if (contentScriptResponse?.sanitizedContext) {
-          sanitizedContext = contentScriptResponse.sanitizedContext;
-          console.log(`[Background] 📥 Received sanitized context: ${sanitizedContext.totalElements} elements, ${sanitizedContext.redactions?.length || 0} redactions.`);
-          resultPayload.steps.push({ 
-            step: "content_script_message", 
-            status: contentScriptResponse.status || "acknowledged",
-            totalElements: sanitizedContext.totalElements,
-            redactionsCount: sanitizedContext.redactions?.length || 0
-          });
-        } else {
-          const reason = contentScriptResponse?.error || "Content script was not reachable";
-          console.warn("[Background] ⚠️ Could not get sanitized context from tab:", reason);
-          resultPayload.steps.push({ step: "content_script_message", status: "failed", error: reason });
-          resultPayload.error = "Could not extract DOM from page. Please refresh the page tab (F5 / Ctrl+R) and click 'Start Agent' again.";
-          sendResponse({
-            status: "error",
-            message: resultPayload.error,
-            data: resultPayload
-          });
-          return; // Abort - never send empty context: null
-        }
-      } catch (contentErr) {
-        console.warn("[Background] Error communicating with content script:", contentErr.message);
-        resultPayload.steps.push({ step: "content_script_message", error: contentErr.message });
-        resultPayload.error = `Content script error: ${contentErr.message}. Please refresh the page tab.`;
-        sendResponse({ status: "error", message: resultPayload.error, data: resultPayload });
-        return;
-      }
+      throw new Error("No active browser tab located.");
     }
 
-    // Step 3: Construct Outgoing Server Payload
-    const serverPayload = {
-      action: "INITIATE_TASK",
-      goal: goal,
-      activeTab: activeTab ? { id: activeTab.id, url: activeTab.url, title: activeTab.title } : null,
-      context: sanitizedContext ? {
-        url: sanitizedContext.url,
-        title: sanitizedContext.title,
-        totalElements: sanitizedContext.totalElements,
-        elements: sanitizedContext.elements,
-        redactions: sanitizedContext.redactions
-      } : null,
-      timestamp: new Date().toISOString()
-    };
-
-    console.log("[Background] 📤 Prepared server payload:", JSON.stringify(serverPayload, null, 2));
-
-    // Step 4: Run Fail-Closed Privacy Firewall Scan as final gate
-    console.log("[Background] Step 4: Running final fail-closed Privacy Firewall scan...");
-    const scanner = typeof runFinalPrivacyScan === "function" ? runFinalPrivacyScan : (typeof self !== "undefined" && self.runFinalPrivacyScan ? self.runFinalPrivacyScan : null);
-    if (scanner) {
-      const firewallResult = scanner(serverPayload);
-      if (firewallResult.blocked) {
-        console.error("[Background] 🚨 PRIVACY FIREWALL BLOCKED OUTGOING REQUEST:", firewallResult);
-        resultPayload.steps.push({
-          step: "privacy_firewall",
-          status: "blocked",
-          violationsCount: firewallResult.violationsCount,
-          violations: firewallResult.violations
-        });
-        resultPayload.error = `Transmission aborted: Privacy Firewall detected ${firewallResult.violationsCount} unredacted secret(s) in payload.`;
-        sendResponse({
-          status: "blocked",
-          message: "Privacy Firewall aborted transmission to protect user privacy.",
-          data: resultPayload
-        });
-        return; // ABORT - NEVER SEND SENSITIVE DATA
-      }
-      console.log("[Background] 🛡️ Final Privacy Firewall check passed (zero PII detected).");
-      resultPayload.steps.push({ step: "privacy_firewall", status: "passed" });
-    }
-
-    // Step 4: Send POST request to backend server
-    console.log(`[Background] Step 4: Dispatching POST request to ${SERVER_URL}...`);
-    const response = await fetch(SERVER_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(serverPayload)
+    console.log(`[Background] ✅ Active tab located: ID=${activeTab.id}, URL=${activeTab.url}`);
+    resultPayload.steps.push({
+      step: "tab_query",
+      status: "success",
+      tabId: activeTab.id,
+      url: activeTab.url,
+      title: activeTab.title
     });
 
-    if (!response.ok) {
-      throw new Error(`Server returned HTTP ${response.status}: ${response.statusText}`);
+    // Step 2: Extract initial perception state
+    console.log("[Background] Step 2: Requesting initial sanitized DOM from Tab", activeTab.id);
+    const initialPerception = await requestSanitizedDOMFromTab(activeTab.id, goal);
+
+    if (!initialPerception?.sanitizedContext) {
+      const errorMsg = initialPerception?.error || "Content script did not return DOM perception.";
+      throw new Error(`Could not extract DOM from page (${errorMsg}). Please refresh the tab.`);
     }
 
-    const json = await response.json();
-    console.log("[Background] ✅ Response received from server:", json);
-    resultPayload.serverData = json;
-    resultPayload.steps.push({ step: "server_post", status: "success" });
+    sanitizedContext = initialPerception.sanitizedContext;
+    console.log(`[Background] 📥 Initial perception: ${sanitizedContext.totalElements} elements, ${sanitizedContext.redactions?.length || 0} redactions.`);
 
-    // Send final response back to popup
-    sendResponse({
+    resultPayload.steps.push({
+      step: "initial_perception",
       status: "success",
-      message: "Task successfully processed by background and echoed by server.",
+      totalElements: sanitizedContext.totalElements,
+      redactionsCount: sanitizedContext.redactions?.length || 0
+    });
+
+    notifyPopupProgress({
+      step: 0,
+      maxSteps: MAX_LOOP_STEPS,
+      status: "initialized",
+      message: `Initial page scanned: ${sanitizedContext.totalElements} elements.`
+    });
+
+    // ========================================================================
+    // Step 3: Re-Observation Loop (Max 10 steps safety cap)
+    // ========================================================================
+    let stepCount = 0;
+    const history = [];
+
+    while (stepCount < MAX_LOOP_STEPS) {
+      console.log(`\n================================================================================`);
+      console.log(`[Background] 🔄 STARTING LOOP CYCLE (Step ${stepCount + 1} / ${MAX_LOOP_STEPS})`);
+      console.log(`================================================================================`);
+
+      // 3a. Prepare Outgoing Server Payload
+      const serverPayload = {
+        action: "PLAN_ACTION",
+        goal: goal,
+        activeTab: { id: activeTab.id, url: activeTab.url, title: activeTab.title },
+        context: sanitizedContext ? {
+          url: sanitizedContext.url,
+          title: sanitizedContext.title,
+          totalElements: sanitizedContext.totalElements,
+          elements: sanitizedContext.elements,
+          redactions: sanitizedContext.redactions
+        } : null,
+        history: history,
+        step: stepCount,
+        timestamp: new Date().toISOString()
+      };
+
+      // 3b. Fail-Closed Privacy Firewall Gate check before transmission
+      console.log(`[Background] 🛡️ Running Privacy Firewall on outgoing payload (Step ${stepCount + 1})...`);
+      const scanner = typeof runFinalPrivacyScan === "function"
+        ? runFinalPrivacyScan
+        : (typeof self !== "undefined" && self.runFinalPrivacyScan ? self.runFinalPrivacyScan : null);
+
+      if (scanner) {
+        const firewallResult = scanner(serverPayload);
+        if (firewallResult.blocked) {
+          console.error("[Background] 🚨 PRIVACY FIREWALL BLOCKED OUTGOING REQUEST:", firewallResult);
+          resultPayload.status = "blocked";
+          resultPayload.stopReason = `Privacy Firewall blocked transmission: ${firewallResult.violationsCount} unredacted secret(s) found.`;
+          resultPayload.steps.push({
+            step: "privacy_firewall",
+            status: "blocked",
+            stepNumber: stepCount + 1,
+            violationsCount: firewallResult.violationsCount,
+            violations: firewallResult.violations
+          });
+
+          notifyPopupProgress({
+            step: stepCount,
+            maxSteps: MAX_LOOP_STEPS,
+            status: "blocked",
+            message: resultPayload.stopReason
+          });
+
+          sendResponse({
+            status: "blocked",
+            message: resultPayload.stopReason,
+            data: resultPayload
+          });
+          return; // FAIL-CLOSED ABORT
+        }
+      }
+
+      // 3c. Reason: Request next action from server planner
+      console.log(`[Background] 📡 Dispatching POST request to ${SERVER_URL}...`);
+      let serverResponse;
+      try {
+        const postRes = await fetch(SERVER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(serverPayload)
+        });
+
+        if (!postRes.ok) {
+          throw new Error(`Server returned HTTP ${postRes.status}: ${postRes.statusText}`);
+        }
+        serverResponse = await postRes.json();
+      } catch (netErr) {
+        console.error("[Background] ❌ Server communication error:", netErr.message);
+        resultPayload.status = "error";
+        resultPayload.stopReason = `Server error: ${netErr.message}`;
+        resultPayload.error = netErr.message;
+        notifyPopupProgress({
+          step: stepCount,
+          maxSteps: MAX_LOOP_STEPS,
+          status: "error",
+          message: resultPayload.stopReason
+        });
+        sendResponse({ status: "error", message: resultPayload.stopReason, data: resultPayload });
+        return;
+      }
+
+      const plannedAction = serverResponse.action || serverResponse;
+      console.log(`[Background] 📥 Server returned planned action:`, plannedAction);
+
+      // 3d. Check for Completion or Wait Signals
+      if (plannedAction.action === "DONE") {
+        console.log("[Background] 🏁 Planner signaled completion (DONE). Loop finishing.");
+        resultPayload.status = "completed";
+        resultPayload.stopReason = plannedAction.reason || "Goal achieved successfully.";
+        resultPayload.steps.push({
+          step: "loop_action",
+          stepNumber: stepCount + 1,
+          action: plannedAction,
+          status: "done"
+        });
+
+        notifyPopupProgress({
+          step: stepCount,
+          maxSteps: MAX_LOOP_STEPS,
+          status: "completed",
+          lastAction: "DONE",
+          message: resultPayload.stopReason
+        });
+        break; // Goal completed!
+      }
+
+      if (plannedAction.action === "WAIT" && plannedAction.reason === "no actionable target found") {
+        console.log("[Background] ⏸️ Planner returned WAIT: no actionable target found.");
+        resultPayload.status = "idle";
+        resultPayload.stopReason = "Planner returned WAIT: no actionable target found.";
+        resultPayload.steps.push({
+          step: "loop_action",
+          stepNumber: stepCount + 1,
+          action: plannedAction,
+          status: "wait"
+        });
+
+        notifyPopupProgress({
+          step: stepCount,
+          maxSteps: MAX_LOOP_STEPS,
+          status: "idle",
+          lastAction: "WAIT",
+          message: resultPayload.stopReason
+        });
+        break;
+      }
+
+      // 3e. Execute Action in Tab via Content Script
+      stepCount++;
+      resultPayload.stepCount = stepCount;
+
+      console.log(`[Background] ⚡ Executing Step ${stepCount}:`, plannedAction.action, plannedAction.target || "");
+      const execResponse = await executeActionInTab(activeTab.id, plannedAction, 300);
+
+      // 3f. Handle Validator Rejection
+      if (execResponse.valid === false) {
+        console.warn(`[Background] ❌ ActionValidator rejected action on Step ${stepCount}:`, execResponse.reason);
+        resultPayload.status = "rejected";
+        resultPayload.stopReason = `Action validator rejected: ${execResponse.reason}`;
+        resultPayload.steps.push({
+          step: "action_execution",
+          stepNumber: stepCount,
+          action: plannedAction,
+          status: "rejected",
+          rejectionReason: execResponse.reason
+        });
+
+        notifyPopupProgress({
+          step: stepCount,
+          maxSteps: MAX_LOOP_STEPS,
+          status: "rejected",
+          lastAction: `${plannedAction.action} ${plannedAction.target || ""}`.trim(),
+          rejectionReason: execResponse.reason,
+          message: `Validator rejected: ${execResponse.reason}`
+        });
+        break; // Never proceed on invalid action
+      }
+
+      // 3g. Handle Execution Failure
+      if (!execResponse.success) {
+        const execErr = execResponse.executionError || execResponse.error || "Unknown execution error";
+        console.error(`[Background] ❌ Action execution failed on Step ${stepCount}:`, execErr);
+        resultPayload.status = "failed";
+        resultPayload.stopReason = `Execution failed: ${execErr}`;
+        resultPayload.steps.push({
+          step: "action_execution",
+          stepNumber: stepCount,
+          action: plannedAction,
+          status: "failed",
+          error: execErr
+        });
+
+        notifyPopupProgress({
+          step: stepCount,
+          maxSteps: MAX_LOOP_STEPS,
+          status: "failed",
+          lastAction: `${plannedAction.action} ${plannedAction.target || ""}`.trim(),
+          message: `Execution failed: ${execErr}`
+        });
+        break;
+      }
+
+      // 3h. Success: Record to history and update state with re-observed context
+      console.log(`[Background] ✅ Step ${stepCount} executed successfully.`);
+      history.push({
+        step: stepCount,
+        action: plannedAction,
+        result: execResponse.executionResult,
+        timestamp: new Date().toISOString()
+      });
+
+      resultPayload.steps.push({
+        step: "action_execution",
+        stepNumber: stepCount,
+        action: plannedAction,
+        status: "success",
+        executionResult: execResponse.executionResult
+      });
+
+      // Update perception context from re-observed DOM
+      sanitizedContext = execResponse.sanitizedContext;
+
+      notifyPopupProgress({
+        step: stepCount,
+        maxSteps: MAX_LOOP_STEPS,
+        status: "step_complete",
+        lastAction: `${plannedAction.action} ${plannedAction.target || ""}`.trim(),
+        elementsCount: sanitizedContext?.totalElements || 0,
+        message: `Step ${stepCount} complete: ${plannedAction.action} on ${plannedAction.target || ""}`
+      });
+
+      // 3i. Hard cap check
+      if (stepCount >= MAX_LOOP_STEPS) {
+        console.log("[Background] 🛑 Maximum steps cap (10) reached. max steps reached.");
+        resultPayload.status = "max_steps_reached";
+        resultPayload.stopReason = "max steps reached";
+        notifyPopupProgress({
+          step: stepCount,
+          maxSteps: MAX_LOOP_STEPS,
+          status: "max_steps",
+          message: "max steps reached"
+        });
+        break;
+      }
+    }
+
+    resultPayload.history = history;
+
+    // Send final resolution to popup
+    sendResponse({
+      status: resultPayload.status === "failed" || resultPayload.status === "blocked" ? "error" : "success",
+      message: resultPayload.stopReason || `Loop finished after ${stepCount} step(s).`,
       data: resultPayload
     });
 
   } catch (err) {
     console.error("[Background] ❌ Error in handleStartTask:", err);
+    resultPayload.status = "error";
     resultPayload.error = err.message;
+    resultPayload.stopReason = err.message;
     sendResponse({
       status: "error",
       message: err.message,
