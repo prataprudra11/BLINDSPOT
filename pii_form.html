@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Demo Portal — PII Verification Form</title>
+  <title>Demo Portal — Multi-Step PII Verification Form</title>
   <style>
     :root {
       --bg: #090d16;
@@ -11,16 +11,20 @@
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --primary: #10b981;
+      --primary-hover: #059669;
+      --accent: #38bdf8;
       --border: #23314d;
+      --border-focus: #3b82f6;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg);
       color: var(--text);
       padding: 40px 20px;
       display: flex;
       justify-content: center;
+      min-height: 100vh;
     }
     .form-card {
       background: var(--card-bg);
@@ -28,31 +32,128 @@
       border-radius: 16px;
       padding: 32px;
       width: 100%;
-      max-width: 600px;
+      max-width: 620px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      position: relative;
     }
     .banner-warning {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
       color: #f87171;
       padding: 12px 16px;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 12.5px;
+      line-height: 1.5;
       margin-bottom: 24px;
     }
     .profile-header {
       display: flex;
       align-items: center;
       gap: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
     .face-avatar {
-      width: 64px;
-      height: 64px;
+      width: 58px;
+      height: 58px;
       border-radius: 50%;
       background: #1e293b;
       border: 2px solid var(--primary);
+      flex-shrink: 0;
     }
+    .profile-info h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .profile-info p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Wizard Step Bar */
+    .step-wizard-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding: 12px 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .step-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+    .step-pill.active {
+      color: var(--accent);
+    }
+    .step-pill.completed {
+      color: var(--primary);
+    }
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+    .step-pill.active .step-num {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    }
+    .step-pill.completed .step-num {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .step-line {
+      flex: 1;
+      height: 2px;
+      background: #1e293b;
+      margin: 0 10px;
+    }
+    .step-line.completed {
+      background: var(--primary);
+    }
+
+    /* Page Titles */
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-title-row h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .page-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    /* Form controls */
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -69,9 +170,12 @@
       color: var(--text);
       font-size: 13px;
       outline: none;
+      transition: border-color 0.15s ease;
     }
     input:focus, textarea:focus { border-color: var(--primary); }
-    button {
+
+    /* Buttons */
+    .btn-step-next, .btn-submit {
       width: 100%;
       padding: 12px;
       background: var(--primary);
@@ -81,14 +185,78 @@
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 16px;
+      margin-top: 8px;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+    .btn-step-next:hover, .btn-submit:hover {
+      background: var(--primary-hover);
+    }
+    .page-btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .btn-step-prev {
+      width: 35%;
+      padding: 12px;
+      background: #1e293b;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-step-prev:hover {
+      background: #334155;
+      color: var(--text);
+    }
+    .page-btn-row .btn-step-next, .page-btn-row .btn-submit {
+      width: 65%;
+      margin-top: 0;
+    }
+
+    /* Success confirmation screen */
+    .success-card {
+      text-align: center;
+      padding: 36px 16px;
+    }
+    .success-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      animation: pop 0.4s ease;
+    }
+    .success-card h3 {
+      font-size: 20px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .success-msg {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .success-details {
+      display: inline-flex;
+      gap: 20px;
+      padding: 10px 18px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.6); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
     }
   </style>
 </head>
 <body>
   <div class="form-card">
     <div class="banner-warning">
-      🔒 <strong>PRIVACY FIREWALL DEMO:</strong> All inputs on this page contain synthetic dummy values. Test that local perception redacts name, email, phone, PAN, Aadhaar, and credit card fields.
+      🔒 <strong>PRIVACY FIREWALL DEMO:</strong> Multi-Step PII Verification (3 Pages). Test that local perception redacts secrets on every step and loops until final completion.
     </div>
 
     <div class="profile-header">
@@ -97,58 +265,195 @@
         <circle cx="50" cy="38" r="18" fill="#94a3b8" />
         <path d="M 20 82 Q 50 55 80 82 Z" fill="#94a3b8" />
       </svg>
-      <div>
+      <div class="profile-info">
         <h3>Synthetic User Identity</h3>
-        <p style="font-size: 12px; color: #94a3b8;">Profile ID: SYN-883921</p>
+        <p>Profile ID: SYN-883921</p>
       </div>
     </div>
 
-    <form onsubmit="event.preventDefault(); alert('PII Form Submitted (Synthetic)!');">
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="full-name">Full Name</label>
-          <input type="text" id="full-name" name="name" value="Jane Doe Synthetic" />
+    <!-- Step Progress Wizard Navigation -->
+    <div class="step-wizard-nav">
+      <div class="step-pill active" id="pill-step-1">
+        <span class="step-num">1</span>
+        <span class="step-label">Personal</span>
+      </div>
+      <div class="step-line" id="line-1"></div>
+      <div class="step-pill" id="pill-step-2">
+        <span class="step-num">2</span>
+        <span class="step-label">KYC Docs</span>
+      </div>
+      <div class="step-line" id="line-2"></div>
+      <div class="step-pill" id="pill-step-3">
+        <span class="step-num">3</span>
+        <span class="step-label">Payment</span>
+      </div>
+    </div>
+
+    <form id="multi-step-pii-form" onsubmit="handleFinalSubmit(event)">
+      
+      <!-- ================================================================ -->
+      <!-- PAGE 1 OF 3: Personal & Contact Information                       -->
+      <!-- ================================================================ -->
+      <div class="form-page" id="page-1">
+        <div class="page-title-row">
+          <h4>Step 1: Personal & Contact Details</h4>
+          <span class="page-badge">Page 1 of 3</span>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label for="full-name">Full Name</label>
+            <input type="text" id="full-name" name="name" value="Jane Doe Synthetic" />
+          </div>
+          <div class="form-group">
+            <label for="email-addr">Email Address</label>
+            <input type="email" id="email-addr" name="email" value="jane.doe@synthetic-test.org" />
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label for="phone-num">Phone Number</label>
+            <input type="tel" id="phone-num" name="phone" value="+91 98765 43210" />
+          </div>
+          <div class="form-group">
+            <label for="pass-field">Account Password</label>
+            <input type="password" id="pass-field" name="password" value="SuperSecretDemoPass99!" />
+          </div>
+        </div>
+
+        <button type="button" id="btn-next-page-1" class="btn-step-next" onclick="goToPage(2)">
+          Continue to Step 2: KYC Details →
+        </button>
+      </div>
+
+      <!-- ================================================================ -->
+      <!-- PAGE 2 OF 3: Address & Government KYC Identification             -->
+      <!-- ================================================================ -->
+      <div class="form-page" id="page-2" style="display: none;">
+        <div class="page-title-row">
+          <h4>Step 2: Address & Government KYC</h4>
+          <span class="page-badge">Page 2 of 3</span>
         </div>
         <div class="form-group">
-          <label for="email-addr">Email Address</label>
-          <input type="email" id="email-addr" name="email" value="jane.doe@synthetic-test.org" />
+          <label for="res-address">Residential Address</label>
+          <textarea id="res-address" name="address" rows="2">123 Synthetic Tech Park, Block B, New Delhi, India</textarea>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label for="pan-card">Synthetic PAN Card Number</label>
+            <input type="text" id="pan-card" name="pan" value="ABCDE1234F" />
+          </div>
+          <div class="form-group">
+            <label for="aadhaar-card">Synthetic Aadhaar Number</label>
+            <input type="text" id="aadhaar-card" name="aadhaar" value="2345-6789-0123" />
+          </div>
+        </div>
+
+        <div class="page-btn-row">
+          <button type="button" class="btn-step-prev" onclick="goToPage(1)">← Back</button>
+          <button type="button" id="btn-next-page-2" class="btn-step-next" onclick="goToPage(3)">
+            Continue to Step 3: Payment →
+          </button>
         </div>
       </div>
 
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="phone-num">Phone Number</label>
-          <input type="tel" id="phone-num" name="phone" value="+91 98765 43210" />
+      <!-- ================================================================ -->
+      <!-- PAGE 3 OF 3: Payment & Final Submission                          -->
+      <!-- ================================================================ -->
+      <div class="form-page" id="page-3" style="display: none;">
+        <div class="page-title-row">
+          <h4>Step 3: Payment Verification & Final Submit</h4>
+          <span class="page-badge">Page 3 of 3</span>
         </div>
         <div class="form-group">
-          <label for="pass-field">Account Password</label>
-          <input type="password" id="pass-field" name="password" value="SuperSecretDemoPass99!" />
+          <label for="credit-card">Synthetic Credit Card</label>
+          <input type="text" id="credit-card" name="card" value="4532-0151-1283-0366" />
         </div>
-      </div>
 
-      <div class="form-group">
-        <label for="res-address">Residential Address</label>
-        <textarea id="res-address" name="address" rows="2">123 Synthetic Tech Park, Block B, New Delhi, India</textarea>
-      </div>
-
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="pan-card">Synthetic PAN Card Number</label>
-          <input type="text" id="pan-card" name="pan" value="ABCDE1234F" />
-        </div>
-        <div class="form-group">
-          <label for="aadhaar-card">Synthetic Aadhaar Number</label>
-          <input type="text" id="aadhaar-card" name="aadhaar" value="2345-6789-0123" />
+        <div class="page-btn-row">
+          <button type="button" class="btn-step-prev" onclick="goToPage(2)">← Back</button>
+          <button type="submit" id="btn-submit-pii" class="btn-submit">
+            Submit Verified Profile
+          </button>
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="credit-card">Synthetic Credit Card</label>
-        <input type="text" id="credit-card" name="card" value="4532-0151-1283-0366" />
+      <!-- ================================================================ -->
+      <!-- PAGE 4: Confirmation / Success Screen                            -->
+      <!-- ================================================================ -->
+      <div class="form-page" id="page-success" style="display: none;">
+        <div class="success-card">
+          <div class="success-icon">✅</div>
+          <h3>Verification Complete!</h3>
+          <p class="success-msg">All 3 steps completed. Synthetic Profile Successfully Submitted.</p>
+          <div class="success-details">
+            <span>Reference: <strong>SYN-883921</strong></span>
+            <span>Status: <strong style="color: #10b981;">Verified & Saved</strong></span>
+          </div>
+        </div>
       </div>
 
-      <button type="submit" id="btn-submit-pii">Submit Verified Profile</button>
     </form>
   </div>
+
+  <script>
+    // Multi-page navigation controller
+    function goToPage(targetPageNum) {
+      console.log("[PII Form] Transitioning to Page " + targetPageNum);
+      for (let i = 1; i <= 3; i++) {
+        const pageEl = document.getElementById("page-" + i);
+        const pillEl = document.getElementById("pill-step-" + i);
+        const lineEl = document.getElementById("line-" + (i - 1));
+
+        if (pageEl) {
+          pageEl.style.display = (i === targetPageNum) ? "block" : "none";
+        }
+        if (pillEl) {
+          if (i === targetPageNum) {
+            pillEl.className = "step-pill active";
+          } else if (i < targetPageNum) {
+            pillEl.className = "step-pill completed";
+          } else {
+            pillEl.className = "step-pill";
+          }
+        }
+        if (lineEl) {
+          if (i <= targetPageNum) {
+            lineEl.classList.add("completed");
+          } else {
+            lineEl.classList.remove("completed");
+          }
+        }
+      }
+    }
+
+    function handleFinalSubmit(event) {
+      if (event) event.preventDefault();
+      console.log("[PII Form] Form submitted! Showing confirmation screen.");
+
+      for (let i = 1; i <= 3; i++) {
+        const pageEl = document.getElementById("page-" + i);
+        if (pageEl) pageEl.style.display = "none";
+        const pillEl = document.getElementById("pill-step-" + i);
+        if (pillEl) pillEl.className = "step-pill completed";
+      }
+
+      const successEl = document.getElementById("page-success");
+      if (successEl) successEl.style.display = "block";
+
+      if (typeof alert === "function") {
+        try { alert("PII Form Submitted (Synthetic)!"); } catch (_) {}
+      }
+    }
+
+    // Support audit view mode if query param is set (?view=all or #all)
+    if (window.location && (window.location.search.includes("view=all") || window.location.hash === "#all")) {
+      for (let i = 1; i <= 3; i++) {
+        const p = document.getElementById("page-" + i);
+        if (p) p.style.display = "block";
+      }
+    }
+  </script>
 </body>
 </html>
