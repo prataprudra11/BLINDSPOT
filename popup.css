@@ -369,3 +369,52 @@ body {
   color: var(--accent-cyan);
   font-family: var(--font-mono);
 }
+
+/* Telemetry Card */
+.telemetry-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.telemetry-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.telemetry-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.telemetry-val {
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.telemetry-rejection {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #fda4af;
+}
+
+.rejection-label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.rejection-val {
+  font-family: var(--font-mono);
+  word-break: break-word;
+}

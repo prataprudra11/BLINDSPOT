@@ -11,6 +11,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const statusBadge = document.getElementById("statusBadge");
   const statusText = document.getElementById("statusText");
 
+  // Telemetry elements
+  const telemetryStep = document.getElementById("telemetryStep");
+  const telemetryAction = document.getElementById("telemetryAction");
+  const telemetryRejectionBox = document.getElementById("telemetryRejectionBox");
+  const telemetryRejection = document.getElementById("telemetryRejection");
+
   // Helper: Append a formatted log entry to the UI console
   function logToUI(message, type = "info") {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -45,13 +51,48 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.disabled = true;
       btnSpinner.classList.remove("hidden");
       updateStatus("running", "Running");
+      if (telemetryRejectionBox) telemetryRejectionBox.classList.add("hidden");
     } else {
       startBtn.disabled = false;
       btnSpinner.classList.add("hidden");
     }
   }
 
-  // 1. Handle "Start Agent" Button Click
+  // Helper: Update telemetry UI values
+  function updateTelemetry(step, maxSteps, lastAction, rejection) {
+    if (telemetryStep && step !== undefined) {
+      telemetryStep.textContent = `${step} / ${maxSteps || 10}`;
+    }
+    if (telemetryAction && lastAction) {
+      telemetryAction.textContent = lastAction;
+    }
+    if (telemetryRejectionBox && telemetryRejection) {
+      if (rejection) {
+        telemetryRejection.textContent = rejection;
+        telemetryRejectionBox.classList.remove("hidden");
+      } else {
+        telemetryRejectionBox.classList.add("hidden");
+      }
+    }
+  }
+
+  // Listen for real-time progress updates broadcast by background service worker
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "LOOP_STEP_UPDATE") {
+      updateTelemetry(message.step, message.maxSteps, message.lastAction, message.rejectionReason);
+
+      if (message.rejectionReason) {
+        logToUI(`⚠️ Validator Rejected: ${message.rejectionReason}`, "warn");
+      } else if (message.message) {
+        const logType = message.status === "failed" || message.status === "blocked" 
+          ? "error" 
+          : (message.status === "completed" ? "success" : "info");
+        logToUI(message.message, logType);
+      }
+    }
+  });
+
+  // 1. Handle "Start Agent" Button Click (Initiates closed loop)
   startBtn.addEventListener("click", () => {
     const goal = taskGoalInput.value.trim();
     if (!goal) {
@@ -60,9 +101,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    logToUI(`Initiating task: "${goal}"`, "info");
+    logToUI(`Initiating task loop: "${goal}"`, "info");
     console.log("[Popup] 🚀 Dispatching START_TASK to background service worker with goal:", goal);
     setLoading(true);
+    updateTelemetry(0, 10, "Starting...", null);
 
     chrome.runtime.sendMessage(
       {
@@ -81,30 +123,26 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        console.log("[Popup] 📥 Received response from background worker:", response);
+        console.log("[Popup] 📥 Final response from background worker:", response);
+
+        const data = response?.data;
+        const finalStep = data?.stepCount !== undefined ? data.stepCount : 0;
+        const lastAction = data?.history && data.history.length > 0 
+          ? `${data.history[data.history.length - 1].action.action} ${data.history[data.history.length - 1].action.target || ""}`.trim()
+          : "Completed";
+
+        updateTelemetry(finalStep, data?.maxSteps || 10, lastAction, data?.status === "rejected" ? data.stopReason : null);
 
         if (response && response.status === "success") {
-          logToUI(`Background completed task orchestration.`, "success");
-          
-          // Log details of intermediate steps
-          if (response.data && response.data.steps) {
-            response.data.steps.forEach(stepItem => {
-              if (stepItem.step === "tab_query") {
-                logToUI(`Active Tab: ${stepItem.title || stepItem.url || 'Tab ' + stepItem.tabId}`, "info");
-              } else if (stepItem.step === "content_script_message") {
-                const csStatus = stepItem.response?.status || stepItem.error || "no response";
-                logToUI(`Content Script status: ${csStatus}`, stepItem.error ? "warn" : "info");
-              } else if (stepItem.step === "server_post") {
-                logToUI(`Server Echo: ${response.data.serverData?.message || "200 OK"}`, "success");
-              }
-            });
-          }
-
+          logToUI(`Loop finished successfully: ${response.message || "Goal completed"}`, "success");
           updateStatus("success", "Done");
+        } else if (response && response.status === "blocked") {
+          logToUI(`Privacy Firewall Blocked transmission: ${response.message}`, "error");
+          updateStatus("error", "Blocked");
         } else {
-          const errMsg = response?.message || "Unknown error occurred";
-          logToUI(`Task failed: ${errMsg}`, "error");
-          updateStatus("error", "Failed");
+          const errMsg = response?.message || "Loop stopped with error";
+          logToUI(`Task ended: ${errMsg}`, data?.status === "rejected" ? "warn" : "error");
+          updateStatus("error", data?.status === "rejected" ? "Rejected" : "Failed");
         }
       }
     );
@@ -145,6 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
   clearLogsBtn.addEventListener("click", () => {
     logsConsole.innerHTML = "";
     logToUI("Logs cleared.", "system");
+    updateTelemetry(0, 10, "None", null);
     updateStatus("idle", "Idle");
   });
 });

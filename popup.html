@@ -45,6 +45,22 @@
         </button>
       </div>
 
+      <!-- Loop Telemetry Card -->
+      <div id="loopTelemetry" class="telemetry-card">
+        <div class="telemetry-row">
+          <span class="telemetry-label">Loop Step:</span>
+          <span id="telemetryStep" class="telemetry-val">0 / 10</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">Last Action:</span>
+          <span id="telemetryAction" class="telemetry-val">None</span>
+        </div>
+        <div id="telemetryRejectionBox" class="telemetry-rejection hidden">
+          <span class="rejection-label">⚠️ Validator Rejection:</span>
+          <span id="telemetryRejection" class="rejection-val"></span>
+        </div>
+      </div>
+
       <!-- Logs / Status Area -->
       <section class="logs-section">
         <div class="logs-header">
