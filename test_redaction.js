@@ -93,26 +93,30 @@ function check(label, condition) {
   }
 }
 
-// Check 1: Typed placeholders substituted
+// Check 1: Typed instance-numbered placeholders substituted
 check(
-  "Email placeholder [REDACTED:email] present",
-  outputJSONString.includes("[REDACTED:email]")
+  "Email placeholder EMAIL_1 present",
+  outputJSONString.includes("EMAIL_1")
 );
 check(
-  "Phone placeholder [REDACTED:phone] present",
-  outputJSONString.includes("[REDACTED:phone]")
+  "Phone placeholder PHONE_1 present",
+  outputJSONString.includes("PHONE_1")
 );
 check(
-  "Card placeholder [REDACTED:card] present",
-  outputJSONString.includes("[REDACTED:card]")
+  "Card placeholder CARD_1 present",
+  outputJSONString.includes("CARD_1")
 );
 check(
-  "Aadhaar placeholder [REDACTED:aadhaar] present",
-  outputJSONString.includes("[REDACTED:aadhaar]")
+  "Aadhaar placeholder AADHAAR_1 present",
+  outputJSONString.includes("AADHAAR_1")
 );
 check(
-  "Password element text redacted to [REDACTED:sensitive]",
-  outputJSONString.includes("[REDACTED:sensitive]")
+  "Password element text redacted to PASSWORD_1",
+  outputJSONString.includes("PASSWORD_1")
+);
+check(
+  "Redaction log entries include assigned placeholder field",
+  sanitizedResult.redactions.every(r => typeof r.placeholder === "string" && r.placeholder.length > 0)
 );
 
 // Check 2: Redactions log categories
@@ -160,6 +164,55 @@ check(
 if (leakedSecrets.length > 0) {
   console.error("  ⚠️ LEAK DETECTED:", leakedSecrets);
 }
+
+// -----------------------------------------------------------------------------
+// Check 5: Instance Numbering & Deduplication Test (Requirement 6)
+// Verifies identical raw values receive the SAME placeholder number,
+// and different raw values receive sequential numbers (EMAIL_1, EMAIL_2).
+// -----------------------------------------------------------------------------
+console.log("\n🧪 Running Placeholder Instance-Numbering Test Case:");
+const duplicateAndSequentialDOM = {
+  url: "https://demo.internal/dedupe-test",
+  title: "Deduplication & Sequential Numbering Test",
+  totalElements: 3,
+  elements: [
+    {
+      id: "el_001",
+      tag: "p",
+      type: "text block",
+      text: "Primary email: alice@example.com on file",
+      sensitive: false
+    },
+    {
+      id: "el_002",
+      tag: "p",
+      type: "text block",
+      text: "Confirmation sent to alice@example.com earlier",
+      sensitive: false
+    },
+    {
+      id: "el_003",
+      tag: "p",
+      type: "text block",
+      text: "Secondary email: bob.smith@work.org registered",
+      sensitive: false
+    }
+  ]
+};
+
+const dedupResult = sanitizeContext(duplicateAndSequentialDOM);
+const el1Text = dedupResult.elements[0].text;
+const el2Text = dedupResult.elements[1].text;
+const el3Text = dedupResult.elements[2].text;
+
+check(
+  "Identical raw email receives the SAME placeholder (EMAIL_1) across elements",
+  el1Text.includes("EMAIL_1") && el2Text.includes("EMAIL_1")
+);
+check(
+  "Distinct raw email of same category receives sequential placeholder (EMAIL_2)",
+  el3Text.includes("EMAIL_2")
+);
 
 console.log("\n================================================================================");
 if (allPassed) {

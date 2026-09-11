@@ -118,6 +118,103 @@ const PII_PATTERNS = [
   }
 ];
 
+// ============================================================================
+// Placeholder Registry (Per-Scan-Cycle Instance Numbering)
+// ============================================================================
+
+const placeholderRegistry = new Map();
+const placeholderCounters = new Map();
+
+const CATEGORY_PREFIX_MAP = {
+  email: "EMAIL",
+  phone: "PHONE",
+  name: "PERSON",
+  person: "PERSON",
+  card: "CARD",
+  payment: "CARD",
+  address: "ADDRESS",
+  password: "PASSWORD",
+  sensitive: "PASSWORD",
+  pan: "PAN",
+  aadhaar: "AADHAAR"
+};
+
+/**
+ * Resets the placeholder registry and counters for a fresh scan cycle.
+ */
+function resetPlaceholderRegistry() {
+  placeholderRegistry.clear();
+  placeholderCounters.clear();
+}
+
+/**
+ * Normalizes a raw PII string for consistent deduplicated placeholder numbering.
+ * Light normalization: trim whitespace, lowercase for email, strip spaces/dashes for phone/card/aadhaar.
+ */
+function normalizeRawValue(category, rawValue) {
+  if (typeof rawValue !== "string") return "";
+  let val = rawValue.trim();
+  const cat = (category || "").toLowerCase();
+
+  if (cat === "email") {
+    val = val.toLowerCase();
+  } else if (cat === "phone" || cat === "card" || cat === "payment" || cat === "aadhaar") {
+    val = val.replace(/[\s.-]/g, "");
+  } else if (cat === "pan") {
+    val = val.toUpperCase();
+  } else {
+    val = val.replace(/\s+/g, " ");
+  }
+
+  return val;
+}
+
+/**
+ * Retrieves an existing placeholder if rawValue was already seen this scan,
+ * or assigns and returns the next sequential one (e.g. EMAIL_1, PERSON_2).
+ *
+ * @param {string} category - Category (email, phone, name, card, aadhaar, pan, address, password)
+ * @param {string} [rawValue] - Raw matched text
+ * @returns {string} Assigned placeholder (e.g. EMAIL_1, PERSON_1)
+ */
+function getPlaceholder(category, rawValue) {
+  const catKey = (category || "").toLowerCase();
+  const prefix = CATEGORY_PREFIX_MAP[catKey] || catKey.toUpperCase() || "REDACTED";
+
+  // Password / sensitive absolute-purge items are numbered per-instance
+  if (catKey === "password" || catKey === "sensitive" || rawValue === undefined || rawValue === null) {
+    const currentCount = (placeholderCounters.get(prefix) || 0) + 1;
+    placeholderCounters.set(prefix, currentCount);
+    return `${prefix}_${currentCount}`;
+  }
+
+  const normalized = normalizeRawValue(catKey, rawValue);
+  const registryKey = `${prefix}::${normalized}`;
+
+  if (placeholderRegistry.has(registryKey)) {
+    return placeholderRegistry.get(registryKey);
+  }
+
+  const nextCount = (placeholderCounters.get(prefix) || 0) + 1;
+  placeholderCounters.set(prefix, nextCount);
+
+  const assignedPlaceholder = `${prefix}_${nextCount}`;
+  placeholderRegistry.set(registryKey, assignedPlaceholder);
+
+  return assignedPlaceholder;
+}
+
+/**
+ * Checks if a value is already redacted by a typed placeholder.
+ */
+function isAlreadyRedacted(val) {
+  if (typeof val !== "string") return false;
+  return (
+    /^(EMAIL|PHONE|PERSON|CARD|ADDRESS|PASSWORD|PAN|AADHAAR)_\d+$/i.test(val) ||
+    val.includes("[REDACTED:")
+  );
+}
+
 /**
  * Redacts PII patterns from a text string.
  * Returns the sanitized string and records any redaction events without logging raw PII.
@@ -138,24 +235,20 @@ function redactText(text, selector) {
     // Reset regex state in case of global flag
     pattern.regex.lastIndex = 0;
 
-    let matchOccurred = false;
     sanitized = sanitized.replace(pattern.regex, (match) => {
       // Validate candidate match if a validator function is attached (e.g. Luhn algorithm for cards)
       if (typeof pattern.validate === "function" && !pattern.validate(match)) {
         return match; // Keep original non-PII text
       }
-      matchOccurred = true;
-      return pattern.placeholder;
-    });
-
-    if (matchOccurred) {
-      // NOTE: We log ONLY the selector and category, NEVER the raw matched text.
+      const placeholder = getPlaceholder(pattern.category, match);
       events.push({
         selector: selector || "unknown",
         category: pattern.category,
-        confidence: pattern.confidence
+        confidence: pattern.confidence,
+        placeholder: placeholder
       });
-    }
+      return placeholder;
+    });
   }
 
   return { sanitizedText: sanitized, redactionEvents: events };
@@ -166,10 +259,16 @@ function redactText(text, selector) {
  * 
  * Rules:
  * 1. Elements already flagged sensitive: true (e.g. passwords, payment inputs)
- *    must NEVER include any value or raw text. This rule takes absolute priority.
- * 2. All text attributes (text, label, placeholder) across elements are scanned
- *    and redacted using typed placeholders ([REDACTED:email], [REDACTED:phone], etc.).
- * 3. Logs all redaction events in a dedicated `redactions` array without raw PII.
+ *    must NEVER include any value or raw secret hints.
+ * 2. Form controls (input, textarea, select): PII regex checks and address/name
+ *    heuristics are strictly scoped to user data in `value`. Static metadata
+ *    like `label` or `placeholder` are never scanned or redacted.
+ * 3. Page context elements (headings, text blocks, paragraphs): Visible `text`
+ *    is scanned and redacted with numbered placeholders (EMAIL_1, PHONE_1, etc.).
+ * 4. Any element with a matching entry in the redactions array (any confidence)
+ *    receives `sensitive: true` on its record.
+ * 5. Deduplicates redactions array: each element+category combo appears exactly
+ *    once per scan cycle, including assigned placeholder string.
  * 
  * @param {Object} extractedJSON - Output from extractDOM()
  * @returns {Object} Sanitized context object
@@ -179,104 +278,122 @@ function sanitizeContext(extractedJSON) {
     throw new Error("sanitizeContext: extractedJSON must be a valid object");
   }
 
+  // Reset placeholder registry at start of perception/sanitization cycle
+  resetPlaceholderRegistry();
+
   const elements = Array.isArray(extractedJSON.elements) ? extractedJSON.elements : [];
   const sanitizedElements = [];
   const redactions = [];
+  const seenRedactions = new Set();
+
+  function recordRedaction(targetRef, category, confidence, selector, placeholder) {
+    const dedupeKey = `${targetRef}::${category}`;
+    if (!seenRedactions.has(dedupeKey)) {
+      seenRedactions.add(dedupeKey);
+      const entry = {
+        id: targetRef,
+        category: category,
+        confidence: confidence
+      };
+      if (placeholder) {
+        entry.placeholder = placeholder;
+      }
+      if (selector) entry.selector = selector;
+      redactions.push(entry);
+    }
+  }
 
   for (const originalEl of elements) {
     // Clone element to prevent mutating the original input object
     const el = { ...originalEl };
-
     const targetRef = el.id || el.selector || "unknown";
+    let elementRedacted = false;
 
-    // Absolute priority rule: Any element flagged sensitive: true must NEVER leak value or raw text
+    // Absolute priority rule: Any element flagged sensitive: true structurally
+    // (e.g. password, payment inputs) must NEVER leak value or raw text hints.
     if (el.sensitive === true) {
-      // Ensure any value property is completely removed
       if ("value" in el) {
         delete el.value;
       }
-      
-      // Sanitize text if present to prevent any credential/secret hints
-      el.text = "[REDACTED:sensitive]";
-
-      const redEntry = {
-        id: targetRef,
-        category: el.category || "sensitive",
-        confidence: 1.0
-      };
-      if (el.selector) redEntry.selector = el.selector;
-      redactions.push(redEntry);
-
+      const cat = el.category || (el.type === "password" ? "password" : "sensitive");
+      const placeholder = getPlaceholder(cat);
+      if ("text" in el) {
+        el.text = placeholder;
+      }
+      recordRedaction(targetRef, cat, 1.0, el.selector, placeholder);
       sanitizedElements.push(el);
       continue;
     }
 
-    // Standard elements: check visible text / label / placeholder
-    if (typeof el.text === "string" && el.text.length > 0) {
-      const { sanitizedText, redactionEvents } = redactText(el.text, targetRef);
-      el.text = sanitizedText;
-      if (redactionEvents.length > 0) {
-        redactions.push(...redactionEvents.map(evt => {
-          const entry = { id: targetRef, category: evt.category, confidence: evt.confidence };
-          if (el.selector) entry.selector = el.selector;
-          return entry;
-        }));
-      }
-    }
+    const isFormControl = ["input", "textarea", "select"].includes(el.tag);
 
-    // Double-check if any unintended "value" key sneaked into an input
-    if ("value" in el) {
-      if (typeof el.value === "string" && el.value.length > 0) {
+    if (isFormControl) {
+      // Form controls: ONLY scan actual user-entered/prefilled data in el.value.
+      // NEVER scan el.label, el.placeholder, or static text fields.
+      if ("value" in el && typeof el.value === "string" && el.value.length > 0) {
+        // 1. PII regex checks on el.value
         const { sanitizedText, redactionEvents } = redactText(el.value, targetRef);
         el.value = sanitizedText;
         if (redactionEvents.length > 0) {
-          redactions.push(...redactionEvents.map(evt => {
-            const entry = { id: targetRef, category: evt.category, confidence: evt.confidence };
-            if (el.selector) entry.selector = el.selector;
-            return entry;
-          }));
+          elementRedacted = true;
+          for (const evt of redactionEvents) {
+            recordRedaction(targetRef, evt.category, evt.confidence, el.selector, evt.placeholder);
+          }
+        }
+
+        // 2. Contextual form field heuristics for Name and Address (Option B stopgap)
+        const fieldMeta = `${el.label || ""} ${el.name || ""} ${el.selector || ""}`;
+        const isNameField = /\b(full[-_]?name|name)\b/i.test(fieldMeta);
+        const isAddressField = /\b(address|residence|street)\b/i.test(fieldMeta) && !/email/i.test(fieldMeta);
+
+        if (isNameField && typeof el.value === "string" && el.value.trim() && !isAlreadyRedacted(el.value)) {
+          if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(el.value.trim())) {
+            const placeholder = getPlaceholder("name", el.value);
+            el.value = placeholder;
+            elementRedacted = true;
+            recordRedaction(targetRef, "name", 0.7, el.selector, placeholder);
+          }
+        }
+
+        if (isAddressField && typeof el.value === "string" && el.value.trim() && !isAlreadyRedacted(el.value)) {
+          const placeholder = getPlaceholder("address", el.value);
+          el.value = placeholder;
+          elementRedacted = true;
+          recordRedaction(targetRef, "address", 0.7, el.selector, placeholder);
+        }
+      }
+    } else {
+      // Non-form elements (h1-h6, p, text block, button):
+      // Visible text represents page context and is scanned for PII
+      if (typeof el.text === "string" && el.text.length > 0) {
+        const { sanitizedText, redactionEvents } = redactText(el.text, targetRef);
+        el.text = sanitizedText;
+        if (redactionEvents.length > 0) {
+          elementRedacted = true;
+          for (const evt of redactionEvents) {
+            recordRedaction(targetRef, evt.category, evt.confidence, el.selector, evt.placeholder);
+          }
+        }
+      }
+
+      // If an unintended "value" key was present on a non-form element, scan it as well
+      if ("value" in el && typeof el.value === "string" && el.value.length > 0) {
+        const { sanitizedText, redactionEvents } = redactText(el.value, targetRef);
+        el.value = sanitizedText;
+        if (redactionEvents.length > 0) {
+          elementRedacted = true;
+          for (const evt of redactionEvents) {
+            recordRedaction(targetRef, evt.category, evt.confidence, el.selector, evt.placeholder);
+          }
         }
       }
     }
 
-    // Contextual form field heuristics for Name and Address (Option B stopgap)
-    const isNameField = /full[-_]?name|name/i.test(el.selector || "") || /^(full[-_]?name|name)$/i.test(el.name || "") || /full[-_]?name|name/i.test(el.text || "");
-    const isAddressField = /address|residence/i.test(el.selector || "") || /address/i.test(el.name || "") || /address|residence/i.test(el.text || "");
-
-    if (isNameField && typeof el.value === "string" && el.value.trim() && !el.value.includes("[REDACTED:")) {
-      if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(el.value.trim())) {
-        el.value = "[REDACTED:name]";
-        const entry = {
-          id: targetRef,
-          category: "name",
-          confidence: 0.7
-        };
-        if (el.selector) entry.selector = el.selector;
-        redactions.push(entry);
-      }
-    }
-
-    if (isAddressField) {
-      if (typeof el.value === "string" && el.value.trim() && !el.value.includes("[REDACTED:")) {
-        el.value = "[REDACTED:address]";
-        const entry = {
-          id: targetRef,
-          category: "address",
-          confidence: 0.7
-        };
-        if (el.selector) entry.selector = el.selector;
-        redactions.push(entry);
-      }
-      if (typeof el.text === "string" && el.text.trim() && !el.text.includes("[REDACTED:")) {
-        el.text = "[REDACTED:address]";
-        const entry = {
-          id: targetRef,
-          category: "address",
-          confidence: 0.7
-        };
-        if (el.selector) entry.selector = el.selector;
-        redactions.push(entry);
-      }
+    // Fix the "sensitive" flag bug:
+    // ANY element with a matching entry in the redactions array (any confidence level)
+    // also gets sensitive: true on its own record.
+    if (elementRedacted) {
+      el.sensitive = true;
     }
 
     sanitizedElements.push(el);
@@ -298,7 +415,9 @@ if (typeof module !== "undefined" && module.exports) {
     sanitizeContext,
     redactText,
     isValidLuhn,
-    PII_PATTERNS
+    PII_PATTERNS,
+    getPlaceholder,
+    resetPlaceholderRegistry
   };
 }
 
@@ -307,4 +426,6 @@ if (typeof window !== "undefined") {
   window.redactText = redactText;
   window.isValidLuhn = isValidLuhn;
   window.PII_PATTERNS = PII_PATTERNS;
+  window.getPlaceholder = getPlaceholder;
+  window.resetPlaceholderRegistry = resetPlaceholderRegistry;
 }
