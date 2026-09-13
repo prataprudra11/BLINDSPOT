@@ -99,6 +99,15 @@
                 : "Element flagged sensitive:true retained an unredacted 'value' property."
             });
           }
+
+          // Rule Check 1b: Conservative handling for visualScanFailed elements
+          if (el.visualScanFailed === true && el.sensitive === true) {
+            violations.push({
+              category: el.category || "sensitive",
+              elementId: el.id || el.selector || "unknown",
+              detail: "Element flagged sensitive:true encountered visualScanFailed: cannot guarantee visual secret redaction."
+            });
+          }
         }
       }
     } catch (_) {

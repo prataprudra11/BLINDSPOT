@@ -9,7 +9,7 @@
   "context": {
     "url": "file:///c:/Users/RUDRA/OneDrive/Desktop/FOLDERS/coding/SIH%202026/pii_form.html",
     "title": "Demo Portal — Multi-Step PII Verification Form",
-    "totalElements": 20,
+    "totalElements": 21,
     "elements": [
       {
         "id": "el_001",
@@ -166,6 +166,14 @@
         "type": "text block",
         "sensitive": false,
         "text": "All 3 steps completed. Synthetic Profile Successfully Submitted."
+      },
+      {
+        "id": "el_021",
+        "tag": "canvas",
+        "type": "canvas",
+        "sensitive": false,
+        "text": "",
+        "visualDataUrl": null
       }
     ],
     "redactions": [
@@ -173,51 +181,59 @@
         "id": "el_001",
         "category": "name",
         "confidence": 0.7,
+        "source": "dom",
         "placeholder": "PERSON_1"
       },
       {
         "id": "el_002",
         "category": "email",
         "confidence": 1,
+        "source": "dom",
         "placeholder": "EMAIL_1"
       },
       {
         "id": "el_003",
         "category": "phone",
         "confidence": 1,
+        "source": "dom",
         "placeholder": "PHONE_1"
       },
       {
         "id": "el_004",
         "category": "password",
         "confidence": 1,
+        "source": "dom",
         "placeholder": "PASSWORD_1"
       },
       {
         "id": "el_006",
         "category": "address",
         "confidence": 0.7,
+        "source": "dom",
         "placeholder": "ADDRESS_1"
       },
       {
         "id": "el_007",
         "category": "pan",
         "confidence": 1,
+        "source": "dom",
         "placeholder": "PAN_1"
       },
       {
         "id": "el_008",
         "category": "aadhaar",
         "confidence": 1,
+        "source": "dom",
         "placeholder": "AADHAAR_1"
       },
       {
         "id": "el_011",
         "category": "payment",
         "confidence": 1,
+        "source": "dom",
         "placeholder": "CARD_1"
       }
     ]
   },
-  "timestamp": "2026-09-11T10:12:11.324Z"
+  "timestamp": "2026-09-13T11:13:59.808Z"
 }

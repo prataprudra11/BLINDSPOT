@@ -293,7 +293,8 @@ function sanitizeContext(extractedJSON) {
       const entry = {
         id: targetRef,
         category: category,
-        confidence: confidence
+        confidence: confidence,
+        source: "dom"
       };
       if (placeholder) {
         entry.placeholder = placeholder;

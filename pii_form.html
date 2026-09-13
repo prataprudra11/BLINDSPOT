@@ -350,6 +350,14 @@
           </div>
         </div>
 
+        <div class="form-group">
+          <label>Government ID Document Preview (Canvas)</label>
+          <div style="background: #090d16; border: 1px dashed var(--border); border-radius: 8px; padding: 10px; text-align: center;">
+            <canvas id="kyc-doc-canvas" width="340" height="90" style="border-radius: 6px; max-width: 100%;"></canvas>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Uploaded Aadhaar Card Scan (Rendered on Canvas)</div>
+          </div>
+        </div>
+
         <div class="page-btn-row">
           <button type="button" class="btn-step-prev" onclick="goToPage(1)">← Back</button>
           <button type="button" id="btn-next-page-2" class="btn-step-next" onclick="goToPage(3)">
@@ -447,12 +455,48 @@
       }
     }
 
-    // Support audit view mode if query param is set (?view=all or #all)
-    if (window.location && (window.location.search.includes("view=all") || window.location.hash === "#all")) {
-      for (let i = 1; i <= 3; i++) {
-        const p = document.getElementById("page-" + i);
-        if (p) p.style.display = "block";
-      }
+    // Render synthetic KYC document on Page 2 canvas
+    function initKYCDocCanvas() {
+      const canvas = document.getElementById("kyc-doc-canvas");
+      if (!canvas || !canvas.getContext) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Card background
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Header banner
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(0, 0, canvas.width, 22);
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.fillText("GOVERNMENT OF INDIA - IDENTITY PROOF", 12, 15);
+
+      // Photo placeholder
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(12, 30, 42, 48);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "9px system-ui, sans-serif";
+      ctx.fillText("PHOTO", 16, 56);
+
+      // Cardholder Details
+      ctx.fillStyle = "#f8fafc";
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.fillText("Name: Jane Doe Synthetic", 64, 42);
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText("DOB: 15/08/1990  |  Gender: F", 64, 56);
+
+      // Sensitive Aadhaar number drawn directly on canvas
+      ctx.fillStyle = "#10b981";
+      ctx.font = "bold 12px monospace";
+      ctx.fillText("AADHAAR: 2345-6789-0123", 64, 72);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initKYCDocCanvas);
+    } else {
+      initKYCDocCanvas();
     }
   </script>
 </body>

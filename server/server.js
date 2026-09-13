@@ -69,8 +69,7 @@ app.post("/agent/act", (req, res) => {
       status: "success",
       message: "Server planned next action.",
       receivedAt: timestamp,
-      action: plannedAction,
-      ...plannedAction
+      action: plannedAction
     };
 
     return res.status(200).json(responsePayload);
