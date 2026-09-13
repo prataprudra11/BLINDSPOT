@@ -254,6 +254,8 @@ function resolveElementType(el) {
   if (tagName === "a" || el.getAttribute("role") === "link") return "link";
   if (/^h[1-6]$/.test(tagName) || el.getAttribute("role") === "heading") return "heading";
   if (["p", "blockquote", "li", "span"].includes(tagName)) return "text block";
+  if (tagName === "canvas") return "canvas";
+  if (tagName === "img") return "image";
 
   return tagName;
 }
@@ -307,11 +309,16 @@ function extractDOM() {
   const textSelectors = ["p", "li", "dt", "dd"];
   const textElements = Array.from(document.querySelectorAll(textSelectors.join(",")));
 
+  // Priority 4: Visual elements (canvas and images for DOM fallback)
+  const visualSelectors = ["canvas", "img"];
+  const visualElements = Array.from(document.querySelectorAll(visualSelectors.join(",")));
+
   // Process items in order of priority
   const prioritizedCandidates = [
     ...interactiveElements,
     ...headingElements,
-    ...textElements
+    ...textElements,
+    ...visualElements
   ];
 
   for (const el of prioritizedCandidates) {
@@ -367,6 +374,54 @@ function extractDOM() {
     } else if (isFormControl && typeof el.value === "string" && el.value.length > 0) {
       // For non-sensitive form controls, record current value so local perception can sanitize it
       item.value = el.value;
+    }
+
+    // Phase 4: Visual element handling and DOM-first trigger evaluation
+    if (tagName === "canvas") {
+      item.type = "canvas";
+      const triggerFn = typeof VisionTrigger !== "undefined" ? VisionTrigger.shouldTriggerVision : null;
+      if (triggerFn) {
+        const decision = triggerFn(item);
+        item.visionTriggered = decision.trigger;
+        item.visionReason = decision.reason;
+        if (typeof VisionTrigger.logTriggerDecision === "function") {
+          VisionTrigger.logTriggerDecision(item.id, decision);
+        }
+      }
+      try {
+        if (typeof el.toDataURL === "function") {
+          item.visualDataUrl = el.toDataURL("image/png");
+          console.log(`[Content Script] 🎨 canvas.toDataURL() SUCCEEDED for ${item.id}: ${item.visualDataUrl ? item.visualDataUrl.length : 0} chars`);
+        } else {
+          console.warn(`[Content Script] ⚠️ Canvas element ${item.id} does not have toDataURL method.`);
+        }
+      } catch (canvasErr) {
+        console.error(`[Content Script] ❌ canvas.toDataURL() FAILED for ${item.id}:`, {
+          name: canvasErr?.name,
+          message: canvasErr?.message,
+          stack: canvasErr?.stack
+        });
+      }
+    } else if (tagName === "img") {
+      item.type = "image";
+      item.alt = el.getAttribute("alt") || "";
+      const triggerFn = typeof VisionTrigger !== "undefined" ? VisionTrigger.shouldTriggerVision : null;
+      if (triggerFn) {
+        const decision = triggerFn(item);
+        item.visionTriggered = decision.trigger;
+        item.visionReason = decision.reason;
+        if (typeof VisionTrigger.logTriggerDecision === "function") {
+          VisionTrigger.logTriggerDecision(item.id, decision);
+        }
+      }
+      try {
+        if (item.visionTriggered && el.src && el.src.startsWith("data:image")) {
+          item.visualDataUrl = el.src;
+          console.log(`[Content Script] 🖼️ Image data URL captured for ${item.id}: ${item.visualDataUrl.length} chars`);
+        }
+      } catch (imgErr) {
+        console.error(`[Content Script] ❌ Image capture failed for ${item.id}:`, imgErr?.message);
+      }
     }
 
     extractedList.push(item);
