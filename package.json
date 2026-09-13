@@ -1,0 +1,24 @@
+{
+  "name": "sih-2026",
+  "version": "1.0.0",
+  "description": "> **Repository:** [https://github.com/prataprudra11/BLINDSPOT](https://github.com/prataprudra11/BLINDSPOT)   > **Target Problem:** Secure, Privacy-Preserving AI Browser Agents   > **Current Milestone:** Stage 2 Complete — Zero-Leakage Perception Firewall & End-to-End Extension Plumbing",
+  "main": "action-executor.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prataprudra11/BLINDSPOT.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/prataprudra11/BLINDSPOT/issues"
+  },
+  "homepage": "https://github.com/prataprudra11/BLINDSPOT#readme",
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
+  }
+}

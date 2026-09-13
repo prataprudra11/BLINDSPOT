@@ -6,8 +6,12 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "offscreen"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "host_permissions": [
     "http://localhost:3000/*"
   ],
@@ -23,9 +27,28 @@
         "action-validator.js",
         "action-executor.js",
         "redaction.js",
+        "vision/vision-trigger.js",
         "content_script.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vision/*",
+        "vision/vendor/*",
+        "vision/vendor/*.js",
+        "vision/vendor/*.wasm",
+        "vision/vendor/worker.min.js",
+        "vision/vendor/tesseract.min.js",
+        "vision/vendor/tesseract-core.wasm",
+        "vision/vendor/tesseract-core.wasm.js",
+        "vision/vendor/tessdata/*",
+        "vision/vendor/tessdata/*.gz",
+        "vision/vendor/tessdata/eng.traineddata.gz"
+      ],
+      "matches": ["<all_urls>"]
     }
   ],
   "action": {
