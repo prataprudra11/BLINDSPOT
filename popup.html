@@ -61,6 +61,26 @@
         </div>
       </div>
 
+      <!-- Phase 4: Visual Redaction Before/After Audit Card -->
+      <div id="visualAuditCard" class="telemetry-card visual-audit-card hidden">
+        <div class="telemetry-row">
+          <span class="telemetry-label">👁️ Visual Redaction Audit:</span>
+          <span id="visualAuditTarget" class="telemetry-val">None</span>
+        </div>
+        <div class="visual-audit-thumbnails">
+          <div class="thumb-box">
+            <span class="thumb-caption">Original</span>
+            <img id="thumbOriginal" class="audit-thumb" src="" alt="Original Preview" />
+          </div>
+          <div class="thumb-arrow">→</div>
+          <div class="thumb-box">
+            <span class="thumb-caption">Redacted</span>
+            <img id="thumbRedacted" class="audit-thumb" src="" alt="Redacted Preview" />
+          </div>
+        </div>
+        <div id="visualBadgeContainer" class="visual-badge-row"></div>
+      </div>
+
       <!-- Logs / Status Area -->
       <section class="logs-section">
         <div class="logs-header">

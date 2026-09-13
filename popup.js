@@ -76,6 +76,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Helper: Display visual redaction before/after audit card
+  function updateVisualAudit(elementId, origDataUrl, redDataUrl, redactions = []) {
+    const visualAuditCard = document.getElementById("visualAuditCard");
+    const visualAuditTarget = document.getElementById("visualAuditTarget");
+    const thumbOriginal = document.getElementById("thumbOriginal");
+    const thumbRedacted = document.getElementById("thumbRedacted");
+    const visualBadgeContainer = document.getElementById("visualBadgeContainer");
+
+    if (!visualAuditCard) return;
+
+    if (origDataUrl && redDataUrl) {
+      if (visualAuditTarget) visualAuditTarget.textContent = `${elementId || "Visual element"} (${redactions.length} redacted)`;
+      if (thumbOriginal) thumbOriginal.src = origDataUrl;
+      if (thumbRedacted) thumbRedacted.src = redDataUrl;
+
+      if (visualBadgeContainer) {
+        visualBadgeContainer.innerHTML = "";
+        for (const r of redactions) {
+          const badge = document.createElement("span");
+          badge.className = "visual-badge";
+          badge.textContent = `${r.placeholder || r.category} (vision)`;
+          visualBadgeContainer.appendChild(badge);
+        }
+      }
+
+      visualAuditCard.classList.remove("hidden");
+      logToUI(`👁️ Visual audit: ${redactions.length} secret(s) redacted on ${elementId}`, "info");
+    }
+  }
+
   // Listen for real-time progress updates broadcast by background service worker
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === "LOOP_STEP_UPDATE") {
@@ -89,6 +119,12 @@ document.addEventListener("DOMContentLoaded", () => {
           : (message.status === "completed" ? "success" : "info");
         logToUI(message.message, logType);
       }
+    } else if (message.type === "VISUAL_REDACTION_UPDATE") {
+      updateVisualAudit(message.elementId, message.originalDataUrl, message.redactedDataUrl, message.redactions);
+    } else if (message.type === "OCR_PROGRESS_UPDATE") {
+      logToUI(`👁️ OCR: ${message.status} (${message.progress}%)`, "info");
+    } else if (message.type === "OCR_ERROR_EVENT") {
+      logToUI(`❌ OCR Error: ${message.error}`, "error");
     }
   });
 
